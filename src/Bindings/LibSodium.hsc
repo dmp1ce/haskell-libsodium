@@ -1,5 +1,3 @@
-{-# LANGUAGE ForeignFunctionInterface #-}
-
 {-|
 Module      : Bindings.LibSodium
 Description : Bindings for LibSodium
@@ -12,6 +10,8 @@ Portability : POSIX
 * <https://download.libsodium.org/doc/ Documentation>
 
 -}
+
+{-# LANGUAGE ForeignFunctionInterface #-}
 
 #include <bindings.dsl.h>
 #include <sodium.h>
