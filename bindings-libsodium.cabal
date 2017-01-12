@@ -1,0 +1,73 @@
+name:                bindings-libsodium
+version:             0.1.0.0
+synopsis:            libsodium bindings
+description:         Please see README.md
+
+license:             PublicDomain
+license-file:        LICENSE
+author:              David Parrish
+maintainer:          daveparrish@tutanota.com
+homepage:            https://github.com/TODO:<githubuser>/libsodium
+bug-reports:         https://github.com/TODO:<githubuser>/libsodium/issues
+
+category:            Crypto
+build-type:          Simple
+stability:           alpha (experimental)
+cabal-version:       >=1.10
+
+extra-source-files:
+  README.md
+  stack.yaml
+
+source-repository head
+  type:     git
+  location: https://github.com/TODO:<githubuser>/libsodium
+
+library
+  default-language:  Haskell2010
+  extra-libraries:   sodium
+  other-extensions:
+    ForeignFunctionInterface
+  ghc-options:       -Werror -O2
+  hs-source-dirs:    src
+  exposed-modules:   Bindings.LibSodium
+                   , Crypto.LibSodium
+  build-depends:     base >= 4.8 && < 5
+                   , bindings-DSL >= 1.0.16 && < 1.1
+                   , bytestring
+
+test-suite libsodium-test
+  type:              exitcode-stdio-1.0
+  default-language:  Haskell2010
+  ghc-options:       -Wall -Werror -O2 -threaded -rtsopts -with-rtsopts=-N
+  hs-source-dirs:    src-test
+  main-is:           Main.hs
+  other-modules:     BindingTests
+                   , HighLevelTests
+  build-depends:     base >= 4.8 && < 5
+                   , tasty >= 0.11
+                   , tasty-hunit >= 0.9
+                   , tasty-smallcheck >= 0.8
+                   , bindings-libsodium
+
+test-suite libsodium-doctest
+  type:              exitcode-stdio-1.0
+  default-language:  Haskell2010
+  ghc-options:       -Wall -Werror -O2 -threaded -rtsopts -with-rtsopts=-N
+  hs-source-dirs:    src-doctest
+  main-is:           Main.hs
+  build-depends:     base >= 4.8 && < 5
+                   , doctest >=0.10
+                   , Glob >= 0.7
+                   , QuickCheck >= 2.5
+                   , bindings-libsodium
+
+benchmark libsodium-benchmark
+  type:              exitcode-stdio-1.0
+  default-language:  Haskell2010
+  ghc-options:       -Wall -Werror -O2 -threaded -rtsopts -with-rtsopts=-N
+  hs-source-dirs:    src-benchmark
+  main-is:           Main.hs
+  build-depends:     base >= 4.8 && < 5
+                   , criterion >= 1.1
+                   , bindings-libsodium
