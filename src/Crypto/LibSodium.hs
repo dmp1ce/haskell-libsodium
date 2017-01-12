@@ -18,7 +18,8 @@ import Foreign.Ptr
 
 data InitResult = InitSuccess | InitFailure | AlreadyInitialized | InitUnknown Int
   deriving (Eq, Show)
-data CompareResult = CompareSuccess | CompareFailure | CompareUnknown Int
+
+data CompareResult = CompareEqual | CompareNotEqual | CompareUnknown Int
   deriving (Eq, Show)
 
 -- | <https://download.libsodium.org/doc/usage/ Documentation on when to use sodium_init>
@@ -35,12 +36,17 @@ sodiumInit =
 -- | Uses 'c'sodium_memcmp' for constant-time test for equality
 sodiumMemcmp :: (Storable s) =>  Ptr s -> Ptr s -> IO CompareResult
 sodiumMemcmp p1 p2 = 
-  let mapRes 0    = CompareSuccess
-      mapRes (-1) = CompareFailure
+  let mapRes 0    = CompareEqual
+      mapRes (-1) = CompareNotEqual
       mapRes i    = CompareUnknown i
-  in do v <- peek p1
-        r <- c'sodium_memcmp (castPtr p1) (castPtr p2) ((toEnum . sizeOf) v)
-        (return . mapRes . fromEnum) r
+  in do size1 <- peek p1 >>= return . sizeOf
+        size2 <- peek p2 >>= return . sizeOf
+        if (size1 /= size2)
+        then return CompareNotEqual
+        else do r <- c'sodium_memcmp (castPtr p1)
+                                     (castPtr p2)
+                                     (toEnum size1)
+                (return . mapRes . fromEnum) r
 
 -- ** Random data
 

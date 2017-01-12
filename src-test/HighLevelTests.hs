@@ -38,8 +38,8 @@ test_sodium_memcmp = do
 
     -- Compare failure
     r1 <- sodiumMemcmp ptr1 ptr2
-    r1 @?= CompareFailure
+    r1 @?= CompareNotEqual
 
     -- Compare success
     r2 <- sodiumMemcmp ptr2 ptr2
-    r2 @?= CompareSuccess
+    r2 @?= CompareEqual
