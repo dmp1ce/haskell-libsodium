@@ -9,4 +9,8 @@ The change log is available [on GitHub][2].
 
 ## v0.1.0.0
 
+* Add functions from LibSodium documenation with tests
+  * sodium_init
+  * sodium_memcmp
+  * randombytes_random
 * Initially created.
