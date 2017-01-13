@@ -10,16 +10,17 @@ import Foreign.C.Types
 import Foreign.C.String
 import Foreign.Storable
 import Foreign.Ptr
+import Data.Bits
 
 bindingTests :: [TestTree]
 bindingTests =
   [ testCase "c'randombytes_random" test_c'randombytes_random
   , testCase "c'sodium_init" test_c'sodium_init
   , testCase "c'sodium_memcmp" test_c'sodium_memcmp
+  , testCase "c'sodium_bin2hex" test_c'sodium_bin2hex
   ]
 
 -- Mostly checking that bindings don't crash 
-
 test_c'sodium_init :: Assertion
 test_c'sodium_init = do
   n <- c'sodium_init
@@ -59,3 +60,22 @@ test_c'sodium_memcmp = do
     poke ptr1 2
     r4 <- c'sodium_memcmp (castPtr ptr1) (castPtr ptr2) (toEnum v1_size)
     r4 @?= 0
+
+test_c'sodium_bin2hex :: Assertion
+test_c'sodium_bin2hex = do
+  fPtrBin <- mallocForeignPtr :: IO (ForeignPtr Word)
+  fPtrHex <- mallocForeignPtr :: IO (ForeignPtr CChar)
+  withForeignPtr fPtrBin $ \ptrBin -> withForeignPtr fPtrHex $ \ptrHex -> do
+    poke ptrBin $ bit 6 .|. bit 7
+    binSize <- peek ptrBin >>= return . sizeOf
+    let hexSize = binSize * 2 + 1
+
+    res <- c'sodium_bin2hex ptrHex (toEnum hexSize)
+                            (castPtr ptrBin) (toEnum binSize)
+
+    resValue <- peekCAString res
+    hexValue <- peekCAString ptrHex
+
+    assertEqual "Return and hex memory addresses are the same" ptrHex res
+    assertEqual "Return and hex argument are not equal" resValue hexValue
+    hexValue @?= "c000000000000000"

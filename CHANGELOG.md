@@ -12,5 +12,6 @@ The change log is available [on GitHub][2].
 * Add functions from LibSodium documenation with tests
   * sodium_init
   * sodium_memcmp
+  * sodium_bin2hex
   * randombytes_random
 * Initially created.

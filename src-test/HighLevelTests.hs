@@ -9,12 +9,14 @@ import Foreign.C.Types
 import Foreign.ForeignPtr
 --import Foreign.Ptr
 import Foreign.Storable
+import Data.Bits
 
 hlTests :: [TestTree]
 hlTests =
   [ testCase "sodiumInit" test_sodium_init
   , testCase "randomInteger" test_random_integer
   , testCase "sodiumMemcmp" test_sodium_memcmp
+  , testCase "sodiumBin2Hex" test_sodiumBin2Hex
   ]
 
 test_sodium_init :: Assertion
@@ -43,3 +45,11 @@ test_sodium_memcmp = do
     -- Compare success
     r2 <- sodiumMemcmp ptr2 ptr2
     r2 @?= CompareEqual
+
+test_sodiumBin2Hex :: Assertion
+test_sodiumBin2Hex = do
+  fPtr <- mallocForeignPtr :: IO (ForeignPtr Word)
+  withForeignPtr fPtr $ \ptr -> do
+    poke ptr $ bit 0
+    res <- sodiumBin2Hex ptr
+    res @?= "0100000000000000"

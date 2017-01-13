@@ -31,6 +31,12 @@ module Bindings.LibSodium where
 #ccall sodium_memcmp, Ptr () -> Ptr () -> CSize -> IO CInt
 -- |
 
+-- *** Hexadecimal encoding/decoding
+
+-- | convert string from binary to hexidecimal
+#ccall sodium_bin2hex, Ptr CChar -> CSize -> Ptr () -> CSize -> IO CString
+-- |
+
 -- ** Random data
 
 -- | Generate a random byte

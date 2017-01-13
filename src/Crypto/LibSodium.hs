@@ -15,6 +15,9 @@ module Crypto.LibSodium where
 import Bindings.LibSodium
 import Foreign.Storable
 import Foreign.Ptr
+import Foreign.ForeignPtr
+import Foreign.C.Types
+import Foreign.C.String
 
 data InitResult = InitSuccess | InitFailure | AlreadyInitialized | InitUnknown Int
   deriving (Eq, Show)
@@ -47,6 +50,17 @@ sodiumMemcmp p1 p2 =
                                      (castPtr p2)
                                      (toEnum size1)
                 (return . mapRes . fromEnum) r
+
+-- | Uses 'c'sodium_bin2hex' to convert a 'Storable' into a hexidecimal 'String'
+sodiumBin2Hex :: (Storable s) => Ptr s -> IO String
+sodiumBin2Hex ptrBin = do
+  fPtrHex <- mallocForeignPtr :: IO (ForeignPtr CChar)
+  withForeignPtr fPtrHex $ \ptrHex -> do
+    binSize <- peek ptrBin >>= return . sizeOf
+    let hexSize = binSize * 2 + 1
+    c'sodium_bin2hex ptrHex (toEnum hexSize)
+                     (castPtr ptrBin) (toEnum binSize) >>=
+      peekCAString
 
 -- ** Random data
 
