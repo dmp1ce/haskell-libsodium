@@ -48,8 +48,5 @@ test_sodium_memcmp = do
 
 test_sodiumBin2Hex :: Assertion
 test_sodiumBin2Hex = do
-  fPtr <- mallocForeignPtr :: IO (ForeignPtr Word)
-  withForeignPtr fPtr $ \ptr -> do
-    poke ptr $ bit 0
-    res <- sodiumBin2Hex ptr
+    res <- sodiumBin2Hex ((bit 0) :: Word)
     res @?= "0100000000000000"

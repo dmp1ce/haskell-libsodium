@@ -52,10 +52,12 @@ sodiumMemcmp p1 p2 =
                 (return . mapRes . fromEnum) r
 
 -- | Uses 'c'sodium_bin2hex' to convert a 'Storable' into a hexidecimal 'String'
-sodiumBin2Hex :: (Storable s) => Ptr s -> IO String
-sodiumBin2Hex ptrBin = do
+sodiumBin2Hex :: (Storable s) => s -> IO String
+sodiumBin2Hex bits = do
+  fPtrBin <- mallocForeignPtrBytes (sizeOf bits)
   fPtrHex <- mallocForeignPtr :: IO (ForeignPtr CChar)
-  withForeignPtr fPtrHex $ \ptrHex -> do
+  withForeignPtr fPtrBin $ \ptrBin -> withForeignPtr fPtrHex $ \ptrHex -> do
+    poke ptrBin bits
     binSize <- peek ptrBin >>= return . sizeOf
     let hexSize = binSize * 2 + 1
     c'sodium_bin2hex ptrHex (toEnum hexSize)
