@@ -10,6 +10,8 @@ Portability : POSIX
 * <https://download.libsodium.org/doc/ Documentation>
 
 -}
+
+{-# OPTIONS_GHC -Wall #-}
 module Crypto.LibSodium where
 
 import Bindings.LibSodium
@@ -51,7 +53,7 @@ sodiumMemcmp p1 p2 =
                                      (toEnum size1)
                 (return . mapRes . fromEnum) r
 
--- | Uses 'c'sodium_bin2hex' to convert a 'Storable' into a hexidecimal 'String'
+-- | Uses 'c'sodium_bin2hex' to convert a 'Storable' into a hexadecimal 'String'
 sodiumBin2Hex :: (Storable s) => s -> IO String
 sodiumBin2Hex bits = do
   fPtrBin <- mallocForeignPtrBytes (sizeOf bits)
@@ -63,6 +65,29 @@ sodiumBin2Hex bits = do
     c'sodium_bin2hex ptrHex (toEnum hexSize)
                      (castPtr ptrBin) (toEnum binSize) >>=
       peekCAString
+
+-- | Uses 'c'sodium_hex2bin' to convert a hexadecimal 'String' to a 'Storable'
+-- Be careful with this function! Some error cases are not checked.
+-- Such as invalid hexadecimal values or overflow cases.
+sodiumHex2Bin :: (Storable s) => String -> IO s
+sodiumHex2Bin hex = do
+  let hexLength = length hex
+  fPtrBin <- mallocForeignPtrBytes ((hexLength `div` 2)+1)
+  fPtrBinLen <- mallocForeignPtr :: IO (ForeignPtr CSize)
+  fPtrHexEnd <- mallocForeignPtr :: IO (ForeignPtr (Ptr CChar))
+
+  withForeignPtr fPtrBin $ \ptrBin ->
+    withCString hex $ \ptrHex ->
+      withForeignPtr fPtrBinLen $ \ptrBinLen ->
+        withForeignPtr fPtrHexEnd $ \ptrHexEnd -> do
+
+    binSizeMax <- peek ptrBin >>= return . sizeOf
+    _ <- c'sodium_hex2bin (castPtr ptrBin) (toEnum binSizeMax)
+                            ptrHex (toEnum hexLength) nullPtr
+                            ptrBinLen ptrHexEnd
+
+    binValue <- peek ptrBin
+    return binValue
 
 -- ** Random data
 

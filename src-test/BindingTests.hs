@@ -18,6 +18,8 @@ bindingTests =
   , testCase "c'sodium_init" test_c'sodium_init
   , testCase "c'sodium_memcmp" test_c'sodium_memcmp
   , testCase "c'sodium_bin2hex" test_c'sodium_bin2hex
+  , testCase "c'sodium_hex2bin" test_c'sodium_hex2bin
+  , testCase "hex2bin_bin2hex" test_hex2bin_bin2hex
   ]
 
 -- Mostly checking that bindings don't crash 
@@ -79,3 +81,70 @@ test_c'sodium_bin2hex = do
     assertEqual "Return and hex memory addresses are the same" ptrHex res
     assertEqual "Return and hex argument are not equal" resValue hexValue
     hexValue @?= "c000000000000000"
+
+test_c'sodium_hex2bin :: Assertion
+test_c'sodium_hex2bin = do
+  fPtrBin <- mallocForeignPtr :: IO (ForeignPtr CUInt)
+  fPtrBinLen <- mallocForeignPtr :: IO (ForeignPtr CSize)
+  fPtrHexEnd <- mallocForeignPtr :: IO (ForeignPtr (Ptr CChar))
+  let hexString = "1111zblah"
+      hexLength = length hexString
+
+  withForeignPtr fPtrBin $ \ptrBin ->
+    withCString hexString $ \ptrHex ->
+      withForeignPtr fPtrBinLen $ \ptrBinLen ->
+        withForeignPtr fPtrHexEnd $ \ptrHexEnd -> do
+
+    binSizeMax <- peek ptrBin >>= return . sizeOf
+
+    res <- c'sodium_hex2bin (castPtr ptrBin) (toEnum binSizeMax)
+                            ptrHex (toEnum hexLength) nullPtr
+                            ptrBinLen ptrHexEnd
+
+    binValue    <- peek ptrBin
+    binLenValue <- peek ptrBinLen
+    hexEndValue <- peek ptrHexEnd >>= peekCAString
+
+    res @?= 0
+    binValue @?= 4369
+    binLenValue @?= 2
+    hexEndValue @?= "zblah"
+
+test_hex2bin_bin2hex :: Assertion
+test_hex2bin_bin2hex = do
+  fPtrBin <- mallocForeignPtr :: IO (ForeignPtr CUInt)
+  fPtrBinLen <- mallocForeignPtr :: IO (ForeignPtr CSize)
+  fPtrHexEnd <- mallocForeignPtr :: IO (ForeignPtr (Ptr CChar))
+  let hexString = "11110c00"
+      hexLength = length hexString
+
+  withForeignPtr fPtrBin $ \ptrBin ->
+    withCString hexString $ \ptrHex ->
+      withForeignPtr fPtrBinLen $ \ptrBinLen ->
+        withForeignPtr fPtrHexEnd $ \ptrHexEnd -> do
+
+    binSizeMax <- peek ptrBin >>= return . sizeOf
+
+    -- Convert to bin
+    _ <- c'sodium_hex2bin (castPtr ptrBin) (toEnum binSizeMax)
+                            ptrHex (toEnum hexLength) nullPtr
+                            ptrBinLen ptrHexEnd
+
+    -- Convert back to hex
+    binSize' <- peek ptrBin >>= return . sizeOf
+    let hexSize = binSize' * 2 + 1
+    res <- c'sodium_bin2hex ptrHex (toEnum hexSize)
+                            (castPtr ptrBin) (toEnum binSize')
+    resValue <- peekCAString res
+
+    resValue @?= hexString
+
+-- Can be used to look at raw bit list for debugging
+--bitList :: (Bits b) => b -> Maybe [Bool]
+--bitList b =
+--  let bSizeM = bitSizeMaybe b
+--      createBitList :: (Bits b) => b -> Int -> [Bool]
+--      createBitList b' i
+--        | i < 0     = []
+--        | otherwise = (testBit b' (i)):(createBitList b' (i-1))
+--  in  maybe Nothing (Just <$> reverse . createBitList b) bSizeM

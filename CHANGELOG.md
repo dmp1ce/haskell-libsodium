@@ -13,5 +13,6 @@ The change log is available [on GitHub][2].
   * sodium_init
   * sodium_memcmp
   * sodium_bin2hex
+  * sodium_hex2bin
   * randombytes_random
 * Initially created.
