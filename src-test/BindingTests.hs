@@ -22,6 +22,7 @@ bindingTests =
   , testCase "c'sodium_hex2bin" test_c'sodium_hex2bin
   , testCase "hex2bin_bin2hex" test_hex2bin_bin2hex
   , testCase "c'sodium_increment" test_c'sodium_increment
+  , testCase "c'sodium_add" test_c'sodium_add
   ]
 
 -- Mostly checking that bindings don't crash 
@@ -150,6 +151,21 @@ test_c'sodium_increment = do
     c'sodium_increment (castPtr ptrNum) ((toEnum . sizeOf) bigNum)
     res <- peek ptrNum
     res @?= (bigNum + 1)
+
+test_c'sodium_add :: Assertion
+test_c'sodium_add = do
+  let num1 = 10000000
+  let num2 = 3434343
+  fPtrNum1 <- mallocForeignPtr :: IO (ForeignPtr Word64)
+  fPtrNum2 <- mallocForeignPtr :: IO (ForeignPtr Word64)
+  withForeignPtr fPtrNum1 $ \ptrNum1 ->
+    withForeignPtr fPtrNum2 $ \ptrNum2 -> do
+
+    poke ptrNum1 num1
+    poke ptrNum2 num2
+    c'sodium_add (castPtr ptrNum1) (castPtr ptrNum2) ((toEnum . sizeOf) num1)
+    res <- peek ptrNum1
+    res @?= (num1 + num2)
 
 -- Can be used to look at raw bit list for debugging
 --bitList :: (Bits b) => b -> Maybe [Bool]

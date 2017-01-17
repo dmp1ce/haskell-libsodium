@@ -20,6 +20,7 @@ hlTests =
   , testCase "sodiumHex2Bin" test_sodiumHex2Bin
   , testCase "sodiumHex2Bin_Bin2Hex" test_sodiumHex2Bin_Bin2Hex
   , testCase "sodiumIncrement" test_sodiumIncrement
+  , testCase "sodiumAdd" test_sodiumAdd
   ]
 
 test_sodium_init :: Assertion
@@ -71,3 +72,10 @@ test_sodiumIncrement = do
   let num = 1999000000001
   res <- sodiumIncrement num
   res @?= num + 1
+
+test_sodiumAdd :: Assertion
+test_sodiumAdd = do
+  let num1 = 1999000001
+  let num2 = 123232223
+  res <- sodiumAdd num1 num2
+  res @?= num1 + num2

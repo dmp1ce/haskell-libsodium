@@ -103,6 +103,21 @@ sodiumIncrement i = do
     c'sodium_increment (castPtr ptrNum) ((toEnum . sizeOf) i)
     peek ptrNum
 
+-- *** Adding large numbers
+
+-- | Uses 'c'sodium_add' to an 'Int' to an 'Int'
+-- Be careful using this function. Overflow from addition is not checked.
+sodiumAdd :: Int -> Int -> IO Int
+sodiumAdd x y = do
+  fPtrNum1 <- mallocForeignPtr :: IO (ForeignPtr Int)
+  fPtrNum2 <- mallocForeignPtr :: IO (ForeignPtr Int)
+  withForeignPtr fPtrNum1 $ \ptrNum1 ->
+    withForeignPtr fPtrNum2 $ \ptrNum2 -> do
+    poke ptrNum1 x
+    poke ptrNum2 y
+    c'sodium_add (castPtr ptrNum1) (castPtr ptrNum2) ((toEnum . sizeOf) x)
+    peek ptrNum1
+
 -- ** Random data
 
 -- | Uses 'c'randombytes_random' to produce a random 'Integer'

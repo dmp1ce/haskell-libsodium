@@ -15,5 +15,6 @@ The change log is available [on GitHub][2].
   * sodium_bin2hex
   * sodium_hex2bin
   * sodium_increment
+  * sodium_add
   * randombytes_random
 * Initially created.

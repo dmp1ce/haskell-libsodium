@@ -51,6 +51,11 @@ module Bindings.LibSodium where
 #ccall sodium_increment, Ptr CUChar -> CSize -> IO ()
 -- |
 
+-- *** Adding large numbers
+
+-- | Incrementing large numbers
+#ccall sodium_add, Ptr CUChar -> Ptr CUChar -> CSize -> IO ()
+-- |
 
 -- ** Random data
 
