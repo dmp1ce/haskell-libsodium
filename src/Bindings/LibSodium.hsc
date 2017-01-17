@@ -45,6 +45,10 @@ module Bindings.LibSodium where
                        IO CInt
 -- |
 
+-- *** Incrementing large numbers
+#ccall sodium_increment, Ptr CUChar -> CSize -> IO ()
+-- |
+
 -- ** Random data
 
 -- | Generate a random byte

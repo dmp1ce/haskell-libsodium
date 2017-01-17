@@ -19,6 +19,7 @@ hlTests =
   , testCase "sodiumBin2Hex" test_sodiumBin2Hex
   , testCase "sodiumHex2Bin" test_sodiumHex2Bin
   , testCase "sodiumHex2Bin_Bin2Hex" test_sodiumHex2Bin_Bin2Hex
+  , testCase "sodiumIncrement" test_sodiumIncrement
   ]
 
 test_sodium_init :: Assertion
@@ -64,3 +65,9 @@ test_sodiumHex2Bin_Bin2Hex = do
   bin <- sodiumHex2Bin hex :: IO Word
   hexResult <- sodiumBin2Hex bin
   hexResult @?= hex
+
+test_sodiumIncrement :: Assertion
+test_sodiumIncrement = do
+  let num = 1999000000001
+  res <- sodiumIncrement num
+  res @?= num + 1

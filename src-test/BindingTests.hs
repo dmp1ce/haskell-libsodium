@@ -11,6 +11,7 @@ import Foreign.C.String
 import Foreign.Storable
 import Foreign.Ptr
 import Data.Bits
+import Data.Word
 
 bindingTests :: [TestTree]
 bindingTests =
@@ -20,6 +21,7 @@ bindingTests =
   , testCase "c'sodium_bin2hex" test_c'sodium_bin2hex
   , testCase "c'sodium_hex2bin" test_c'sodium_hex2bin
   , testCase "hex2bin_bin2hex" test_hex2bin_bin2hex
+  , testCase "c'sodium_increment" test_c'sodium_increment
   ]
 
 -- Mostly checking that bindings don't crash 
@@ -138,6 +140,16 @@ test_hex2bin_bin2hex = do
     resValue <- peekCAString res
 
     resValue @?= hexString
+
+test_c'sodium_increment :: Assertion
+test_c'sodium_increment = do
+  let bigNum = 1000000000000000000
+  fPtrNum <- mallocForeignPtr :: IO (ForeignPtr Word64)
+  withForeignPtr fPtrNum $ \ptrNum -> do
+    poke ptrNum bigNum
+    c'sodium_increment (castPtr ptrNum) ((toEnum . sizeOf) bigNum)
+    res <- peek ptrNum
+    res @?= (bigNum + 1)
 
 -- Can be used to look at raw bit list for debugging
 --bitList :: (Bits b) => b -> Maybe [Bool]

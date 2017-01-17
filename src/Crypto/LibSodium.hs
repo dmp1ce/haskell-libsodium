@@ -89,6 +89,15 @@ sodiumHex2Bin hex = do
     binValue <- peek ptrBin
     return binValue
 
+-- | Uses 'c'sodium_increment' to increment a 'Int' by one
+sodiumIncrement :: Int -> IO Int
+sodiumIncrement i = do
+  fPtrNum <- mallocForeignPtr :: IO (ForeignPtr Int)
+  withForeignPtr fPtrNum $ \ptrNum -> do
+    poke ptrNum i
+    c'sodium_increment (castPtr ptrNum) ((toEnum . sizeOf) i)
+    peek ptrNum
+
 -- ** Random data
 
 -- | Uses `c'randombytes_random to produce a random `Integer`
