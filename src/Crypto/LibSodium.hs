@@ -37,6 +37,7 @@ sodiumInit =
   in c'sodium_init >>= return . mapInit . fromEnum
 
 -- ** Helpers
+-- *** Constant-time test for equality
 
 -- | Uses 'c'sodium_memcmp' for constant-time test for equality
 sodiumMemcmp :: (Storable s) =>  Ptr s -> Ptr s -> IO CompareResult
@@ -52,6 +53,8 @@ sodiumMemcmp p1 p2 =
                                      (castPtr p2)
                                      (toEnum size1)
                 (return . mapRes . fromEnum) r
+
+-- *** Hexadecimal encoding/decoding
 
 -- | Uses 'c'sodium_bin2hex' to convert a 'Storable' into a hexadecimal 'String'
 sodiumBin2Hex :: (Storable s) => s -> IO String
@@ -89,6 +92,8 @@ sodiumHex2Bin hex = do
     binValue <- peek ptrBin
     return binValue
 
+-- *** Incrementing large numbers
+
 -- | Uses 'c'sodium_increment' to increment a 'Int' by one
 sodiumIncrement :: Int -> IO Int
 sodiumIncrement i = do
@@ -100,6 +105,6 @@ sodiumIncrement i = do
 
 -- ** Random data
 
--- | Uses `c'randombytes_random to produce a random `Integer`
+-- | Uses 'c'randombytes_random' to produce a random 'Integer'
 randomInteger :: IO Integer
 randomInteger = (return . toInteger) =<< c'randombytes_random

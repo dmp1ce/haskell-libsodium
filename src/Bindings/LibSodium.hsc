@@ -27,7 +27,7 @@ module Bindings.LibSodium where
 
 -- ** Helpers
 
--- | Constant-time  test for equality
+-- | Constant-time test for equality
 #ccall sodium_memcmp, Ptr () -> Ptr () -> CSize -> IO CInt
 -- |
 
@@ -46,8 +46,11 @@ module Bindings.LibSodium where
 -- |
 
 -- *** Incrementing large numbers
+
+-- | Incrementing large numbers
 #ccall sodium_increment, Ptr CUChar -> CSize -> IO ()
 -- |
+
 
 -- ** Random data
 
