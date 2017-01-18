@@ -53,8 +53,20 @@ module Bindings.LibSodium where
 
 -- *** Adding large numbers
 
--- | Incrementing large numbers
+-- | Adding large numbers
 #ccall sodium_add, Ptr CUChar -> Ptr CUChar -> CSize -> IO ()
+-- |
+
+-- *** Comparing large numbers
+
+-- | Comparing large numbers
+#ccall sodium_compare, Ptr () -> Ptr () -> CSize -> IO CInt
+-- |
+
+-- *** Testing for all zeros
+
+-- | Testing for all zeros
+#ccall sodium_is_zero, Ptr CUChar -> CSize -> IO CInt
 -- |
 
 -- ** Random data

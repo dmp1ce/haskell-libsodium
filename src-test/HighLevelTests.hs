@@ -14,13 +14,15 @@ import Data.Bits
 hlTests :: [TestTree]
 hlTests =
   [ testCase "sodiumInit" test_sodium_init
-  , testCase "randomInteger" test_random_integer
   , testCase "sodiumMemcmp" test_sodium_memcmp
   , testCase "sodiumBin2Hex" test_sodiumBin2Hex
   , testCase "sodiumHex2Bin" test_sodiumHex2Bin
   , testCase "sodiumHex2Bin_Bin2Hex" test_sodiumHex2Bin_Bin2Hex
   , testCase "sodiumIncrement" test_sodiumIncrement
   , testCase "sodiumAdd" test_sodiumAdd
+  , testCase "sodiumCompare" test_sodiumCompare
+  , testCase "sodiumIsZero" test_sodiumIsZero
+  , testCase "randomInteger" test_random_integer
   ]
 
 test_sodium_init :: Assertion
@@ -44,11 +46,11 @@ test_sodium_memcmp = do
 
     -- Compare failure
     r1 <- sodiumMemcmp ptr1 ptr2
-    r1 @?= CompareNotEqual
+    r1 @?= MemCompareNotEqual
 
     -- Compare success
     r2 <- sodiumMemcmp ptr2 ptr2
-    r2 @?= CompareEqual
+    r2 @?= MemCompareEqual
 
 test_sodiumBin2Hex :: Assertion
 test_sodiumBin2Hex = do
@@ -79,3 +81,24 @@ test_sodiumAdd = do
   let num2 = 123232223
   res <- sodiumAdd num1 num2
   res @?= num1 + num2
+
+test_sodiumCompare :: Assertion
+test_sodiumCompare = do
+  let num1 = 1999000001
+  let num2 = 123232223
+  res1 <- sodiumCompare num1 num2
+  res2 <- sodiumCompare num2 num2
+  res3 <- sodiumCompare num2 num1
+
+  res1 @?= NumCompareGreaterThan
+  res2 @?= NumCompareEqual
+  res3 @?= NumCompareLessThan
+
+test_sodiumIsZero :: Assertion
+test_sodiumIsZero = do
+  let num1 = 1001 :: Int
+  res <- sodiumIsZero num1
+  res @?= IsZero False
+
+  res2 <- sodiumIsZero (0 :: Int)
+  res2 @?= IsZero True

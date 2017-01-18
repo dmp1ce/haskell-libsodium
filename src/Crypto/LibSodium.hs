@@ -21,10 +21,19 @@ import Foreign.ForeignPtr
 import Foreign.C.Types
 import Foreign.C.String
 
-data InitResult = InitSuccess | InitFailure | AlreadyInitialized | InitUnknown Int
+data InitResult = InitSuccess | InitFailure
+                | AlreadyInitialized | InitUnknown Int
   deriving (Eq, Show)
 
-data CompareResult = CompareEqual | CompareNotEqual | CompareUnknown Int
+data MemCompareResult = MemCompareEqual | MemCompareNotEqual
+                      | MemCompareUnknown Int
+  deriving (Eq, Show)
+
+data NumCompareResult = NumCompareGreaterThan | NumCompareLessThan
+                      | NumCompareEqual | NumCompareUnknown Int
+  deriving (Eq, Show)
+
+data IsZeroResult = IsZero Bool | IsZeroUnknown Int
   deriving (Eq, Show)
 
 -- | <https://download.libsodium.org/doc/usage/ Documentation on when to use sodium_init>
@@ -40,15 +49,15 @@ sodiumInit =
 -- *** Constant-time test for equality
 
 -- | Uses 'c'sodium_memcmp' for constant-time test for equality
-sodiumMemcmp :: (Storable s) =>  Ptr s -> Ptr s -> IO CompareResult
+sodiumMemcmp :: (Storable s) =>  Ptr s -> Ptr s -> IO MemCompareResult
 sodiumMemcmp p1 p2 = 
-  let mapRes 0    = CompareEqual
-      mapRes (-1) = CompareNotEqual
-      mapRes i    = CompareUnknown i
+  let mapRes 0    = MemCompareEqual
+      mapRes (-1) = MemCompareNotEqual
+      mapRes i    = MemCompareUnknown i
   in do size1 <- peek p1 >>= return . sizeOf
         size2 <- peek p2 >>= return . sizeOf
         if (size1 /= size2)
-        then return CompareNotEqual
+        then return MemCompareNotEqual
         else do r <- c'sodium_memcmp (castPtr p1)
                                      (castPtr p2)
                                      (toEnum size1)
@@ -103,9 +112,28 @@ sodiumIncrement i = do
     c'sodium_increment (castPtr ptrNum) ((toEnum . sizeOf) i)
     peek ptrNum
 
+--- *** Comparing large numbers
+
+-- | Uses 'c'sodium_compare' to compare two 'Int'
+sodiumCompare :: Int -> Int -> IO NumCompareResult
+sodiumCompare x y =
+  let mapRes (-1) = NumCompareLessThan
+      mapRes 0    = NumCompareEqual
+      mapRes 1    = NumCompareGreaterThan
+      mapRes i    = NumCompareUnknown i
+  in do fPtrNum1 <- mallocForeignPtr :: IO (ForeignPtr Int)
+        fPtrNum2 <- mallocForeignPtr :: IO (ForeignPtr Int)
+        withForeignPtr fPtrNum1 $ \ptrNum1 ->
+          withForeignPtr fPtrNum2 $ \ptrNum2 -> do
+          poke ptrNum1 x
+          poke ptrNum2 y
+          r <- c'sodium_compare (castPtr ptrNum1) (castPtr ptrNum2)
+                           ((toEnum . sizeOf) x)
+          (return . mapRes . fromEnum) r
+
 -- *** Adding large numbers
 
--- | Uses 'c'sodium_add' to an 'Int' to an 'Int'
+-- | Uses 'c'sodium_add' to add 'Int' to an 'Int'
 -- Be careful using this function. Overflow from addition is not checked.
 sodiumAdd :: Int -> Int -> IO Int
 sodiumAdd x y = do
@@ -117,6 +145,22 @@ sodiumAdd x y = do
     poke ptrNum2 y
     c'sodium_add (castPtr ptrNum1) (castPtr ptrNum2) ((toEnum . sizeOf) x)
     peek ptrNum1
+
+-- *** Testing for all zeros
+
+-- | Uses 'c'sodium_is_zero' to check for all zeros
+sodiumIsZero :: (Storable s) => s -> IO IsZeroResult
+sodiumIsZero x = do
+  let xSize = sizeOf x
+  fPtr <- mallocForeignPtrBytes xSize
+
+  withForeignPtr fPtr $ \ptr -> do
+    poke ptr x
+    r <- c'sodium_is_zero (castPtr ptr) (toEnum xSize)
+    return $ case r of
+      0 -> IsZero False
+      1 -> IsZero True
+      i -> IsZeroUnknown $ fromEnum i
 
 -- ** Random data
 

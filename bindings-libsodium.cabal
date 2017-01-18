@@ -1,7 +1,16 @@
 name:                bindings-libsodium
 version:             0.1.0.0
 synopsis:            libsodium bindings
-description:         Please see README.md
+description:         Bindings to libsodium for Haskell.
+                     .
+                     @bindings-libsodium@ exposes libsodium to
+                     Haskell applications. @bindings-libsodium@ does not
+                     try to protect the developer from using libsodium
+                     incorrectly, so it is important to understand how to
+                     use libsodium. Refer to the
+                     <https://download.libsodium.org/ libsodium documentation>.
+                     Also, see the haddock documentation and
+                     tests for examples on how to use these bindings.
 
 license:             PublicDomain
 license-file:        LICENSE
