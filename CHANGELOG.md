@@ -18,5 +18,6 @@ The change log is available [on GitHub][2].
   * sodium_add
   * sodium_compare
   * sodium_is_zero
+  * sodium_memzero
   * randombytes_random
 * Initially created.

@@ -22,6 +22,7 @@ hlTests =
   , testCase "sodiumAdd" test_sodiumAdd
   , testCase "sodiumCompare" test_sodiumCompare
   , testCase "sodiumIsZero" test_sodiumIsZero
+  , testCase "sodiumMemZero" test_sodiumMemZero
   , testCase "randomInteger" test_random_integer
   ]
 
@@ -102,3 +103,14 @@ test_sodiumIsZero = do
 
   res2 <- sodiumIsZero (0 :: Int)
   res2 @?= IsZero True
+
+test_sodiumMemZero :: Assertion
+test_sodiumMemZero = do
+  let num = 711117 :: Int
+  fPtrNum <- mallocForeignPtr :: IO (ForeignPtr Int)
+  withForeignPtr fPtrNum $ \ptrNum -> do
+    poke ptrNum num
+    sodiumMemZero ptrNum
+
+    res <- peek ptrNum
+    res @?= 0

@@ -162,6 +162,16 @@ sodiumIsZero x = do
       1 -> IsZero True
       i -> IsZeroUnknown $ fromEnum i
 
+-- ** Securing memory allocations
+
+-- *** Zeroing memory
+
+-- | Uses 'c'sodium_memzero' to zero memory location
+sodiumMemZero :: (Storable s) => Ptr s -> IO ()
+sodiumMemZero x = do
+  sizeOfx <- peek x >>= return . sizeOf
+  c'sodium_memzero (castPtr x) (toEnum sizeOfx)
+
 -- ** Random data
 
 -- | Uses 'c'randombytes_random' to produce a random 'Integer'

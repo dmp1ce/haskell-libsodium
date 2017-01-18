@@ -24,6 +24,7 @@ bindingTests =
   , testCase "c'sodium_add" test_c'sodium_add
   , testCase "c'sodium_compare" test_c'sodium_compare
   , testCase "c'sodium_is_zero" test_c'sodium_is_zero
+  , testCase "c'sodium_memzero" test_c'sodium_memzero
   , testCase "c'randombytes_random" test_c'randombytes_random
   ]
 
@@ -213,6 +214,17 @@ test_c'sodium_is_zero = do
     res2 <- c'sodium_is_zero (castPtr ptrNum2) ((toEnum . sizeOf) num1)
     res2 @?= 1
 
+test_c'sodium_memzero :: Assertion
+test_c'sodium_memzero = do
+  let num = 711
+  fPtrNum <- mallocForeignPtr :: IO (ForeignPtr Word64)
+  withForeignPtr fPtrNum $ \ptrNum -> do
+
+    poke ptrNum num
+    c'sodium_memzero (castPtr ptrNum) ((toEnum . sizeOf) num)
+
+    res <- peek ptrNum
+    res @?= 0
 
 -- Can be used to look at raw bit list for debugging
 --bitList :: (Bits b) => b -> Maybe [Bool]

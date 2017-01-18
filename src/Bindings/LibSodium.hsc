@@ -69,6 +69,14 @@ module Bindings.LibSodium where
 #ccall sodium_is_zero, Ptr CUChar -> CSize -> IO CInt
 -- |
 
+-- ** Securing memory allocations
+
+-- *** Zeroing memory
+
+-- | Zeroing memory
+#ccall sodium_memzero, Ptr () -> CSize -> IO ()
+-- |
+
 -- ** Random data
 
 -- | Generate a random byte
