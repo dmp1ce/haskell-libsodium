@@ -25,15 +25,8 @@ data InitResult = InitSuccess | InitFailure
                 | AlreadyInitialized | InitUnknown Int
   deriving (Eq, Show)
 
-data MemCompareResult = MemCompareEqual | MemCompareNotEqual
-                      | MemCompareUnknown Int
-  deriving (Eq, Show)
-
 data NumCompareResult = NumCompareGreaterThan | NumCompareLessThan
                       | NumCompareEqual | NumCompareUnknown Int
-  deriving (Eq, Show)
-
-data IsZeroResult = IsZero Bool | IsZeroUnknown Int
   deriving (Eq, Show)
 
 -- | <https://download.libsodium.org/doc/usage/ Documentation on when to use sodium_init>
@@ -49,15 +42,16 @@ sodiumInit =
 -- *** Constant-time test for equality
 
 -- | Uses 'c'sodium_memcmp' for constant-time test for equality
-sodiumMemcmp :: (Storable s) =>  Ptr s -> Ptr s -> IO MemCompareResult
+sodiumMemcmp :: (Storable s) =>  Ptr s -> Ptr s
+             -> IO (Either Int Bool) -- ^ 'Int' if an unknown error occured.
 sodiumMemcmp p1 p2 = 
-  let mapRes 0    = MemCompareEqual
-      mapRes (-1) = MemCompareNotEqual
-      mapRes i    = MemCompareUnknown i
+  let mapRes 0    = Right True
+      mapRes (-1) = Right False
+      mapRes i    = Left i
   in do size1 <- peek p1 >>= return . sizeOf
         size2 <- peek p2 >>= return . sizeOf
         if (size1 /= size2)
-        then return MemCompareNotEqual
+        then return $ Right False
         else do r <- c'sodium_memcmp (castPtr p1)
                                      (castPtr p2)
                                      (toEnum size1)
@@ -149,7 +143,8 @@ sodiumAdd x y = do
 -- *** Testing for all zeros
 
 -- | Uses 'c'sodium_is_zero' to check for all zeros
-sodiumIsZero :: (Storable s) => s -> IO IsZeroResult
+sodiumIsZero :: (Storable s) => s
+             -> IO (Either Int Bool) -- ^ 'Int' if an unknown error occured.
 sodiumIsZero x = do
   let xSize = sizeOf x
   fPtr <- mallocForeignPtrBytes xSize
@@ -158,9 +153,9 @@ sodiumIsZero x = do
     poke ptr x
     r <- c'sodium_is_zero (castPtr ptr) (toEnum xSize)
     return $ case r of
-      0 -> IsZero False
-      1 -> IsZero True
-      i -> IsZeroUnknown $ fromEnum i
+      0 -> Right False
+      1 -> Right True
+      i -> Left $ fromEnum i
 
 -- ** Securing memory allocations
 
@@ -171,6 +166,33 @@ sodiumMemZero :: (Storable s) => Ptr s -> IO ()
 sodiumMemZero x = do
   sizeOfx <- peek x >>= return . sizeOf
   c'sodium_memzero (castPtr x) (toEnum sizeOfx)
+
+-- *** Locking memory
+
+-- | Uses 'c'sodium_mlock' to prevent memory from being swapped
+sodiumMLock :: (Storable s) => Ptr s
+            -> IO (Either Int Bool) -- ^ 'False' if lock failed.
+                                    -- 'Int' if an unknown error occured.
+sodiumMLock x = do
+  sizeOfx <- peek x >>= return . sizeOf
+  res <- c'sodium_mlock (castPtr x) (toEnum sizeOfx)
+  return $ case res of
+    0    -> Right True
+    (-1) -> Right False
+    i    -> Left $ fromEnum i
+
+-- | Uses 'c'sodium_munlock' to prevent allow memory to be swapped again
+-- after using 'sodiumMLock'.
+sodiumMUnlock :: (Storable s) => Ptr s
+              -> IO (Either Int Bool) -- ^ 'False' if unlock failed.
+                                      -- 'Int' if an unknown error occured.
+sodiumMUnlock x = do
+  sizeOfx <- peek x >>= return . sizeOf
+  res <- c'sodium_munlock (castPtr x) (toEnum sizeOfx)
+  return $ case res of
+    0    -> Right True
+    (-1) -> Right False
+    i    -> Left $ fromEnum i
 
 -- ** Random data
 

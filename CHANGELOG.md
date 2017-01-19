@@ -19,5 +19,7 @@ The change log is available [on GitHub][2].
   * sodium_compare
   * sodium_is_zero
   * sodium_memzero
+  * sodium_mlock
+  * sodium_munlock
   * randombytes_random
 * Initially created.

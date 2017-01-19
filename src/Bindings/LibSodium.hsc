@@ -77,6 +77,16 @@ module Bindings.LibSodium where
 #ccall sodium_memzero, Ptr () -> CSize -> IO ()
 -- |
 
+-- *** Locking memory
+
+-- | Lock memory
+#ccall sodium_mlock, Ptr () -> CSize -> IO CInt
+-- |
+
+-- | Unlock memory
+#ccall sodium_munlock, Ptr () -> CSize -> IO CInt
+-- |
+
 -- ** Random data
 
 -- | Generate a random byte

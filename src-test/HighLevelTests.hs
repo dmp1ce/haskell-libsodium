@@ -23,6 +23,7 @@ hlTests =
   , testCase "sodiumCompare" test_sodiumCompare
   , testCase "sodiumIsZero" test_sodiumIsZero
   , testCase "sodiumMemZero" test_sodiumMemZero
+  , testCase "sodiumMLock" test_sodiumMLock
   , testCase "randomInteger" test_random_integer
   ]
 
@@ -47,11 +48,11 @@ test_sodium_memcmp = do
 
     -- Compare failure
     r1 <- sodiumMemcmp ptr1 ptr2
-    r1 @?= MemCompareNotEqual
+    r1 @?= Right False
 
     -- Compare success
     r2 <- sodiumMemcmp ptr2 ptr2
-    r2 @?= MemCompareEqual
+    r2 @?= Right True
 
 test_sodiumBin2Hex :: Assertion
 test_sodiumBin2Hex = do
@@ -99,10 +100,10 @@ test_sodiumIsZero :: Assertion
 test_sodiumIsZero = do
   let num1 = 1001 :: Int
   res <- sodiumIsZero num1
-  res @?= IsZero False
+  res @?= Right False
 
   res2 <- sodiumIsZero (0 :: Int)
-  res2 @?= IsZero True
+  res2 @?= Right True
 
 test_sodiumMemZero :: Assertion
 test_sodiumMemZero = do
@@ -114,3 +115,15 @@ test_sodiumMemZero = do
 
     res <- peek ptrNum
     res @?= 0
+
+test_sodiumMLock :: Assertion
+test_sodiumMLock = do
+  let num = 7 :: Int
+  fPtrNum <- mallocForeignPtr :: IO (ForeignPtr Int)
+  withForeignPtr fPtrNum $ \ptrNum -> do
+    poke ptrNum num
+    res <- sodiumMLock ptrNum
+    res @?= Right True
+
+    res2 <- sodiumMUnlock ptrNum
+    res2 @?= Right True
