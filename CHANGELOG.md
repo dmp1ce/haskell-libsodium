@@ -21,5 +21,11 @@ The change log is available [on GitHub][2].
   * sodium_memzero
   * sodium_mlock
   * sodium_munlock
+  * sodium_malloc
+  * sodium_allocarray
+  * sodium_free
+  * sodium_mprotect_noaccess
+  * sodium_mprotect_readonly
+  * sodium_mprotect_readwrite
   * randombytes_random
 * Initially created.

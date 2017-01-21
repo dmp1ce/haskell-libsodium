@@ -4,9 +4,12 @@ import Test.Tasty
 
 import BindingTests
 import HighLevelTests
+import Bindings.LibSodium
 
 main :: IO ()
-main = defaultMain $ testGroup "all-tests" tests
+main = do
+  _ <- c'sodium_init -- Initialize sodium first
+  defaultMain $ testGroup "all-tests" tests
 
 tests :: [TestTree]
 tests =

@@ -12,6 +12,8 @@ import Foreign.Storable
 import Foreign.Ptr
 import Data.Bits
 import Data.Word
+import System.Process
+import System.Exit
 
 bindingTests :: [TestTree]
 bindingTests =
@@ -26,6 +28,13 @@ bindingTests =
   , testCase "c'sodium_is_zero" test_c'sodium_is_zero
   , testCase "c'sodium_memzero" test_c'sodium_memzero
   , testCase "c'sodium_mlock" test_c'sodium_mlock
+  , testCase "c'sodium_allocarray" test_c'sodium_allocarray
+  , testCase "c'sodium_mprotect" test_c'sodium_mprotect
+  , testCase "c'sodium_allocarray_crash" $ test_c'sodium_crash "allocarray"
+  , testCase "c'sodium_mprotect_noaccess_crash" $
+             test_c'sodium_crash "mprotect_noaccess"
+  , testCase "c'sodium_mprotect_readonly_crash" $
+             test_c'sodium_crash "mprotect_readonly"
   , testCase "c'randombytes_random" test_c'randombytes_random
   ]
 
@@ -239,6 +248,57 @@ test_c'sodium_mlock = do
 
     res2 <- c'sodium_munlock (castPtr ptrNum) ((toEnum . sizeOf) num)
     res2 @?= 0
+
+test_c'sodium_allocarray :: Assertion
+test_c'sodium_allocarray = do
+  let num1 = 123 :: Word64
+      num2 = 4567:: Word64
+  ptr <- c'sodium_allocarray (toEnum $ sizeOf num1) 2
+  pokeElemOff (castPtr ptr) 0 num1
+  pokeElemOff (castPtr ptr) 1 num2
+
+  peekElemOff (castPtr ptr) 0 >>= (num1 @=?)
+  peekElemOff (castPtr ptr) 1 >>= (num2 @=?)
+
+  -- Free memory
+  c'sodium_free (castPtr ptr)
+
+test_c'sodium_mprotect :: Assertion
+test_c'sodium_mprotect = do
+  let num = 11109 :: Word64
+  ptr <- c'sodium_malloc (toEnum $ sizeOf num)
+  poke (castPtr ptr) num
+
+  -- Set noaccess
+  c'sodium_mprotect_noaccess (castPtr ptr) >>= (0 @=?)
+
+  -- Allow readonly
+  c'sodium_mprotect_readonly (castPtr ptr) >>= (0 @=?)
+
+  -- readonly allows read access
+  ptrPeek <- peek (castPtr ptr)
+  ptrPeek @?= num
+
+  -- Allow readwrite access again
+  c'sodium_mprotect_readwrite (castPtr ptr) >>= (0 @=?)
+
+  poke (castPtr ptr) (num + 1)
+  peek (castPtr ptr) >>= ((num + 1) @=?)
+
+  -- Free memory
+  c'sodium_free (castPtr ptr)
+
+test_c'sodium_crash :: String -> Assertion
+test_c'sodium_crash s = do
+  -- Run a script which tries to access memory which is off limits.
+  res <- readCreateProcessWithExitCode
+         (shell $ "stack runghc -- src-test/sodium_crash_tests.hs " ++ s)
+         ""
+  -- Verify that a crash occured.
+  case res of
+    (ExitFailure i, _, _) -> i @?= (-11)
+    (ExitSuccess, _, _)  -> assertFailure
+                             "Crash script didn't return error code"
 
 -- Can be used to look at raw bit list for debugging
 --bitList :: (Bits b) => b -> Maybe [Bool]

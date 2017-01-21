@@ -29,6 +29,10 @@ data NumCompareResult = NumCompareGreaterThan | NumCompareLessThan
                       | NumCompareEqual | NumCompareUnknown Int
   deriving (Eq, Show)
 
+-- | Pointer with guarded memory allocated by 'sodiumMAlloc'
+-- or 'sodiumAllocArray'
+newtype GuardedPtr a = GuardedPtr { unGuardedPtr :: Ptr a }
+
 -- | <https://download.libsodium.org/doc/usage/ Documentation on when to use sodium_init>
 sodiumInit :: IO InitResult
 sodiumInit =
@@ -193,6 +197,52 @@ sodiumMUnlock x = do
     0    -> Right True
     (-1) -> Right False
     i    -> Left $ fromEnum i
+
+-- *** Guarded heap allocations
+
+-- | Uses 'c'sodium_malloc' to allocate memory which is protected from
+-- overflows
+sodiumMAlloc :: Int -- ^ Bytes of memory to allocate
+             -> IO (GuardedPtr a)
+sodiumMAlloc i = c'sodium_malloc (toEnum i) >>= return . GuardedPtr . castPtr
+
+-- | Uses 'c'sodium_allocarray' to allocate an array of memory protected from
+-- overflows
+sodiumAllocArray :: Int -- ^ Bytes of memory to allocate per object
+                 -> Int -- ^ Number of objects to allocate
+                 -> IO (GuardedPtr a)
+sodiumAllocArray i j = c'sodium_allocarray (toEnum i) (toEnum j) >>=
+  return . GuardedPtr . castPtr
+
+-- | Uses 'c'sodium_free' to deallocate memory allocated by libsodium
+sodiumFree :: GuardedPtr a -> IO ()
+sodiumFree (GuardedPtr ptr) = c'sodium_free (castPtr ptr)
+
+-- | Uses 'c'sodium_mprotect_noaccess' to prevent access to a memory segment
+sodiumMProtectNoAccess :: GuardedPtr a -> IO (Either Int Bool)
+sodiumMProtectNoAccess gPtr = do
+  r <- c'sodium_mprotect_noaccess (castPtr $ unGuardedPtr gPtr)
+  return $ case r of
+    0 -> Right True
+    i -> Left $ fromEnum i
+
+-- | Uses 'c'sodium_mprotect_readonly' to prevent write access
+-- to a memory segment
+sodiumMProtectReadonly :: GuardedPtr a -> IO (Either Int Bool)
+sodiumMProtectReadonly gPtr = do
+  r <- c'sodium_mprotect_readonly (castPtr $ unGuardedPtr gPtr)
+  return $ case r of
+    0 -> Right True
+    i -> Left $ fromEnum i
+
+-- | Uses 'c'sodium_mprotect_readwrite' to allow read and write access
+-- to a memory segment
+sodiumMProtectReadWrite :: GuardedPtr a -> IO (Either Int Bool)
+sodiumMProtectReadWrite gPtr = do
+  r <- c'sodium_mprotect_readwrite (castPtr $ unGuardedPtr gPtr)
+  return $ case r of
+    0 -> Right True
+    i -> Left $ fromEnum i
 
 -- ** Random data
 

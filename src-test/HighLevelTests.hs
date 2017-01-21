@@ -24,6 +24,8 @@ hlTests =
   , testCase "sodiumIsZero" test_sodiumIsZero
   , testCase "sodiumMemZero" test_sodiumMemZero
   , testCase "sodiumMLock" test_sodiumMLock
+  , testCase "sodiumAllocArray" test_sodiumAllocArray
+  , testCase "sodiumMProtect" test_sodiumMProtect
   , testCase "randomInteger" test_random_integer
   ]
 
@@ -127,3 +129,45 @@ test_sodiumMLock = do
 
     res2 <- sodiumMUnlock ptrNum
     res2 @?= Right True
+
+test_sodiumAllocArray :: Assertion
+test_sodiumAllocArray = do
+  let num1 = 1234 :: Int
+      num2 = 5678 :: Int
+  gPtr <- sodiumAllocArray (sizeOf num1) 2
+  pokeElemOff (unGuardedPtr gPtr) 0 num1
+  pokeElemOff (unGuardedPtr gPtr) 1 num2
+
+  peekElemOff (unGuardedPtr gPtr) 0 >>= (num1 @=?)
+  peekElemOff (unGuardedPtr gPtr) 1 >>= (num2 @=?)
+
+  -- Free memory
+  sodiumFree gPtr
+
+
+test_sodiumMProtect :: Assertion
+test_sodiumMProtect = do
+  let num = 777 :: Int
+  gPtr <- sodiumMAlloc (sizeOf num)
+
+  poke (unGuardedPtr gPtr) num
+
+  -- No access
+  sodiumMProtectNoAccess gPtr >>= ((Right True) @=?)
+
+  -- Readonly access
+  sodiumMProtectReadonly gPtr >>= ((Right True) @=?)
+
+  -- Read value
+  peek (unGuardedPtr gPtr) >>= (num @=?)
+
+  -- Allow readwrite access again
+  sodiumMProtectReadWrite gPtr >>= ((Right True) @=?)
+
+  -- Write value
+  poke (unGuardedPtr gPtr) (num + 1)
+
+  -- Read value
+  peek (unGuardedPtr gPtr) >>= ((num + 1) @=?)
+
+  sodiumFree gPtr

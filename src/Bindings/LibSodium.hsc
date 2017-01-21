@@ -87,6 +87,32 @@ module Bindings.LibSodium where
 #ccall sodium_munlock, Ptr () -> CSize -> IO CInt
 -- |
 
+-- *** Guarded heap allocations
+
+-- | Memory allocation
+#ccall sodium_malloc, CSize -> IO (Ptr ())
+-- |
+
+-- | Memory array allocation
+#ccall sodium_allocarray, CSize -> CSize -> IO (Ptr ())
+-- |
+
+-- | Free memory allocation
+#ccall sodium_free, Ptr () -> IO ()
+-- |
+
+-- | No access memory protection
+#ccall sodium_mprotect_noaccess, Ptr () -> IO CInt
+-- |
+
+-- | Read-only access memory protection
+#ccall sodium_mprotect_readonly, Ptr () -> IO CInt
+-- |
+
+-- | Read and write access memory protection
+#ccall sodium_mprotect_readwrite, Ptr () -> IO CInt
+-- |
+
 -- ** Random data
 
 -- | Generate a random byte
