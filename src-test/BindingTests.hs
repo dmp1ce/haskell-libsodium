@@ -36,18 +36,15 @@ bindingTests =
   , testCase "c'sodium_mprotect_readonly_crash" $
              test_c'sodium_crash "mprotect_readonly"
   , testCase "c'randombytes_random" test_c'randombytes_random
+  , testCase "c'randombytes_uniform" test_c'randombytes_uniform
+  , testCase "c'randombytes_buf" test_c'randombytes_buf
+  , testCase "c'randombytes_stir" test_c'randombytes_buf
   ]
 
--- Mostly checking that bindings don't crash 
 test_c'sodium_init :: Assertion
 test_c'sodium_init = do
   n <- c'sodium_init
   assertBool ("c'sodium_init failed with " ++ show n) (n == 0 || n == 1)
-
-test_c'randombytes_random :: Assertion
-test_c'randombytes_random = do
-  n <- c'randombytes_random
-  assertBool ("Random byte '" ++ (show n) ++ "' is negative") ( n >= 0 )
 
 test_c'sodium_memcmp :: Assertion
 test_c'sodium_memcmp = do
@@ -299,6 +296,41 @@ test_c'sodium_crash s = do
     (ExitFailure i, _, _) -> i @?= (-11)
     (ExitSuccess, _, _)  -> assertFailure
                              "Crash script didn't return error code"
+
+test_c'randombytes_random :: Assertion
+test_c'randombytes_random = do
+  n <- c'randombytes_random
+  assertBool ("Random byte '" ++ (show n) ++ "' is negative") ( n >= 0 )
+
+test_c'randombytes_uniform :: Assertion
+test_c'randombytes_uniform = do
+  let upperBound = 4
+  n <- c'randombytes_uniform upperBound
+  assertBool ("Random byte '" ++ (show n) ++ "' is negative") ( n >= 0 )
+  assertBool ("Random byte '" ++ (show n) ++
+              "' greater than or equal to " ++ show upperBound)
+             ( n < upperBound )
+
+test_c'randombytes_buf :: Assertion
+test_c'randombytes_buf = do
+  let size = 32
+  fPtr <- mallocForeignPtrBytes size
+  withForeignPtr fPtr $ \ptr -> do
+    c'randombytes_buf (castPtr ptr) (toEnum size)
+    n <- peek ptr :: IO CUInt
+    assertBool ("Random byte '" ++ (show n) ++ "' is negative") ( n >= 0 )
+
+test_c'randombytes_stir :: Assertion
+test_c'randombytes_stir = do
+  -- Close random resources
+  c'randombytes_close >>= (0 @=?)
+
+  -- Open random resources
+  c'randombytes_stir
+
+  -- Make sure random still works
+  test_c'randombytes_random
+  test_c'randombytes_uniform
 
 -- Can be used to look at raw bit list for debugging
 --bitList :: (Bits b) => b -> Maybe [Bool]

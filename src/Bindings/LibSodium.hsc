@@ -113,8 +113,33 @@ module Bindings.LibSodium where
 #ccall sodium_mprotect_readwrite, Ptr () -> IO CInt
 -- |
 
--- ** Random data
+-- ** Generating random data
 
 -- | Generate a random byte
 #ccall randombytes_random, IO CUInt
+-- |
+
+-- | Generate a random byte, but it does its best to guarantee a
+-- uniform distribution of the possible output values even when
+-- upper_bound is not a power of 2.
+#ccall randombytes_uniform, CUInt -> IO CUInt
+-- |
+
+-- | Fill 'CSize' random bytes starting at 'Ptr' location
+#ccall randombytes_buf, Ptr () -> CSize -> IO ()
+-- |
+
+{- | 'c'randombytes_close' deallocates the global resources used by the
+pseudo-random number generator. More specifically, when the
+@\/dev\/urandom@ device is used, it closes the descriptor. Explicitly
+calling this function is almost never required. -}
+-- '
+#ccall randombytes_close, IO CInt
+-- |
+
+{- | The 'c'randombytes_stir' function reseeds the pseudo-random number
+generator, if it supports this operation. Calling this function is not
+required with the default generator, even after a @fork()@ call, unless
+the descriptor for @\/dev\/urandom@ was closed using 'c'randombytes_close'. -}
+#ccall randombytes_stir, IO ()
 -- |

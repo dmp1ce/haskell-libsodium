@@ -28,4 +28,8 @@ The change log is available [on GitHub][2].
   * sodium_mprotect_readonly
   * sodium_mprotect_readwrite
   * randombytes_random
+  * randombytes_uniform
+  * randombytes_buf
+  * randombytes_close
+  * randombytes_stir
 * Initially created.
