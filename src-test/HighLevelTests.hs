@@ -2,6 +2,7 @@ module HighLevelTests where
 
 import Test.Tasty
 import Test.Tasty.HUnit
+--import Test.Tasty.SmallCheck
 
 import Crypto.LibSodium
 
@@ -10,6 +11,7 @@ import Foreign.ForeignPtr
 --import Foreign.Ptr
 import Foreign.Storable
 import Data.Bits
+import Control.Monad
 
 hlTests :: [TestTree]
 hlTests =
@@ -26,7 +28,10 @@ hlTests =
   , testCase "sodiumMLock" test_sodiumMLock
   , testCase "sodiumAllocArray" test_sodiumAllocArray
   , testCase "sodiumMProtect" test_sodiumMProtect
-  , testCase "randomInteger" test_random_integer
+  , testCase "randomBytesRandom" test_randomBytesRandom
+  , testCase "randomBytesUniform" test_randomBytesUniform
+  , testCase "randomBytesBuf" test_randomBytesBuf
+  , testCase "randomBytesStir" test_randomBytesStir
   ]
 
 test_sodium_init :: Assertion
@@ -34,12 +39,6 @@ test_sodium_init = do
   r <- sodiumInit
   assertBool ("sodiumInit failed with " ++ show r)
              (r == InitSuccess || r == AlreadyInitialized)
-
--- Mostly checks that `randomInteger` doesn't crash
-test_random_integer :: Assertion
-test_random_integer = do
-  n <- randomInteger 
-  assertBool "randomInteger is not negative" (n >= 0)
 
 test_sodium_memcmp :: Assertion
 test_sodium_memcmp = do
@@ -171,3 +170,41 @@ test_sodiumMProtect = do
   peek (unGuardedPtr gPtr) >>= ((num + 1) @=?)
 
   sodiumFree gPtr
+
+test_randomBytesRandom :: Assertion
+test_randomBytesRandom = replicateM_ 1000 $ do
+  n <- randomBytesRandom
+  assertBool ("randomBytesRandom '" ++ show n ++ "' is negative")
+             (n >= 0)
+
+test_randomBytesUniform :: Assertion
+test_randomBytesUniform = replicateM_ 1000 $ do
+  let bound = 10000
+  n <- randomBytesUniform bound
+  assertBool ("randomBytesUniform '" ++ show n ++ "' is negative")
+             (n >= 0)
+  assertBool ("randomBytesUniform '" ++ show n
+              ++ "' is greater than " ++ show bound)
+             (n <= bound)
+
+test_randomBytesBuf :: Assertion
+test_randomBytesBuf = replicateM_ 1000 $ do
+  fPtr <- mallocForeignPtr :: IO (ForeignPtr Int)
+  withForeignPtr fPtr $ \ptr -> do
+    randomBytesBuf ptr
+    n <- peek ptr
+    -- Rairly will the random Int be 0
+    assertBool ("randomBytesBuf '" ++ show n ++ "' is 0")
+               (n /= 0)
+
+test_randomBytesStir :: Assertion
+test_randomBytesStir = do
+  -- Close random resources
+  randomBytesClose >>= ((Right True) @=?)
+
+  -- Open random resources
+  randomBytesStir
+
+  -- Make sure random still works
+  test_randomBytesRandom
+  test_randomBytesUniform

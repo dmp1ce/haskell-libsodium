@@ -246,6 +246,32 @@ sodiumMProtectReadWrite gPtr = do
 
 -- ** Random data
 
--- | Uses 'c'randombytes_random' to produce a random 'Integer'
-randomInteger :: IO Integer
-randomInteger = (return . toInteger) =<< c'randombytes_random
+-- | Uses 'c'randombytes_random' to produce a random 'Word'
+randomBytesRandom :: IO Int
+randomBytesRandom = (return . fromEnum) =<< c'randombytes_random
+
+-- | Uses 'c'randombytes_uniform' to produce a random 'Int' bounded by 'i'
+randomBytesUniform :: Int -> IO Int
+randomBytesUniform i = (return . fromEnum) =<<
+  c'randombytes_uniform (toEnum i)
+
+-- | Uses 'c'randombytes_buf' to fill a 'Ptr' with random bytes.
+-- Uses 'Storable' to determine size of pointer buffer.
+randomBytesBuf :: (Storable s) => Ptr s -> IO ()
+randomBytesBuf ptr = do
+  ptrSize <- peek ptr >>= return . sizeOf
+  c'randombytes_buf (castPtr ptr) (toEnum ptrSize)
+
+-- | Uses 'c'randombytes_close' to deallocates the global resources used by
+-- the pseudo-random number generator.
+randomBytesClose :: IO (Either Int Bool)
+randomBytesClose = do
+  r <- c'randombytes_close
+  return $ case r of
+    0 -> Right True
+    i -> Left $ fromEnum i
+
+-- | Uses 'c'randombytes_stir' reseeds the pseudo-random number generator,
+-- if it supports this operation.
+randomBytesStir :: IO ()
+randomBytesStir = c'randombytes_stir
