@@ -16,6 +16,7 @@ import Data.Bits
 import Data.Word
 import System.Process
 import System.Exit
+import Control.Monad
 
 bindingTests :: [TestTree]
 bindingTests =
@@ -301,7 +302,7 @@ test_c'sodium_crash s = do
                              "Crash script didn't return error code"
 
 test_c'randombytes_random :: Assertion
-test_c'randombytes_random = do
+test_c'randombytes_random = replicateM_ 1000 $ do
   n <- c'randombytes_random
   assertBool ("Random byte '" ++ (show n) ++ "' is negative") ( n >= 0 )
 
