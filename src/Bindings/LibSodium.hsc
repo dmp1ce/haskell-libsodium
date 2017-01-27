@@ -143,3 +143,35 @@ required with the default generator, even after a @fork()@ call, unless
 the descriptor for @\/dev\/urandom@ was closed using 'c'randombytes_close'. -}
 #ccall randombytes_stir, IO ()
 -- |
+
+-- ** Secret-key authenticated encryption
+
+{- $
+Purpose:
+
+1. Encrypt a message with a key and a nonce to keep it confidential
+2. Compute an authentication tag. This tag is used to make sure that the message hasn't been tampered with before decrypting it.
+
+A single key is used both to encrypt\/sign and verify\/decrypt messages. For this reason, it is critical to keep the key confidential.
+
+The nonce doesn't have to be confidential, but it should never ever be reused with the same key. The easiest way to generate a nonce is to use 'c'randombytes_buf'.
+-}
+-- '
+
+-- *** Combined mode
+
+-- | In combined mode, the authentication tag and the encrypted message are stored together. This is usually what you want.
+#ccall crypto_secretbox_easy, Ptr CUChar -> Ptr CUChar -> CULLong -> \
+  Ptr CUChar -> Ptr CUChar -> IO CInt
+-- |
+
+-- | The 'c'crypto_secretbox_open_easy' function verifies and decrypts a ciphertext produced by 'c'crypto_secretbox_easy'.
+#ccall crypto_secretbox_open_easy, Ptr CUChar -> Ptr CUChar -> CULLong -> \
+  Ptr CUChar -> Ptr CUChar -> IO CInt
+-- |
+
+-- *** Constants
+
+#num crypto_secretbox_KEYBYTES
+#num crypto_secretbox_MACBYTES
+#num crypto_secretbox_NONCEBYTES

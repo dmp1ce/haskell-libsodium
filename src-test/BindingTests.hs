@@ -2,6 +2,7 @@ module BindingTests where
 
 import Test.Tasty
 import Test.Tasty.HUnit
+import Test.Tasty.SmallCheck
 
 import Bindings.LibSodium
 
@@ -10,6 +11,7 @@ import Foreign.C.Types
 import Foreign.C.String
 import Foreign.Storable
 import Foreign.Ptr
+import Foreign.Marshal.Array
 import Data.Bits
 import Data.Word
 import System.Process
@@ -39,6 +41,7 @@ bindingTests =
   , testCase "c'randombytes_uniform" test_c'randombytes_uniform
   , testCase "c'randombytes_buf" test_c'randombytes_buf
   , testCase "c'randombytes_stir" test_c'randombytes_buf
+  , testProperty "c'cypto_secretbox_easy_property" prop_c'crypto_secretbox_easy
   ]
 
 test_c'sodium_init :: Assertion
@@ -331,6 +334,34 @@ test_c'randombytes_stir = do
   -- Make sure random still works
   test_c'randombytes_random
   test_c'randombytes_uniform
+
+-- Verify that random messages encrypt and then decrypt
+prop_c'crypto_secretbox_easy :: String -> Property IO
+prop_c'crypto_secretbox_easy message = monadic $ do
+  withCString message $ \ptrMessage -> do
+    -- Length in bytes of message
+    mlen <- lengthArray0 (castCharToCChar '\NUL') ptrMessage
+    let clen = c'crypto_secretbox_MACBYTES + mlen
+    fPtrCypher <- mallocForeignPtrBytes (clen)
+    fPtrNonce <- mallocForeignPtrBytes (c'crypto_secretbox_NONCEBYTES)
+    fPtrKey <- mallocForeignPtrBytes (c'crypto_secretbox_KEYBYTES)
+    withForeignPtr fPtrCypher $ \ptrCypher ->
+      withForeignPtr fPtrNonce $ \ptrNonce ->
+        withForeignPtr fPtrKey $ \ptrKey -> do
+      retEncrypt <- c'crypto_secretbox_easy ptrCypher (castPtr ptrMessage) (toEnum mlen) ptrNonce ptrKey
+      case retEncrypt of
+        0 -> return ()
+        i -> assertFailure $ "Encrypt returned: " ++ show i
+
+      -- See if we get the message back out
+      c'sodium_memzero (castPtr ptrMessage) (toEnum mlen)
+      retDecrypt  <- c'crypto_secretbox_open_easy (castPtr ptrMessage) ptrCypher (toEnum clen) ptrNonce ptrKey
+      case retDecrypt of
+        0 -> return ()
+        i -> assertFailure $ "Decrypt returned: " ++ show i
+
+      peekCString ptrMessage >>= (message @=?)
+  return True
 
 -- Can be used to look at raw bit list for debugging
 --bitList :: (Bits b) => b -> Maybe [Bool]

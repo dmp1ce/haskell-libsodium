@@ -32,4 +32,6 @@ The change log is available [on GitHub][2].
   * randombytes_buf
   * randombytes_close
   * randombytes_stir
+  * crypto_secretbox_easy
+  * crypto_secretbox_open_easy
 * Initially created.
