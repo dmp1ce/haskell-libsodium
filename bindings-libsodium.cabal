@@ -59,6 +59,7 @@ test-suite libsodium-test
                    , tasty-smallcheck >= 0.8
                    , process
                    , bindings-libsodium
+                   , bytestring
 
 test-suite libsodium-doctest
   type:              exitcode-stdio-1.0

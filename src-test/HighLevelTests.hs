@@ -12,6 +12,7 @@ import Foreign.ForeignPtr
 import Foreign.Storable
 import Data.Bits
 import Control.Monad
+import qualified Data.ByteString.Char8 as BS
 
 hlTests :: [TestTree]
 hlTests =
@@ -32,6 +33,7 @@ hlTests =
   , testCase "randomBytesUniform" test_randomBytesUniform
   , testCase "randomBytesBuf" test_randomBytesBuf
   , testCase "randomBytesStir" test_randomBytesStir
+  , testCase "cryptoSecretBoxEasy" test_cryptoSecretBoxEasy
   ]
 
 test_sodium_init :: Assertion
@@ -134,42 +136,38 @@ test_sodiumAllocArray = do
   let num1 = 1234 :: Int
       num2 = 5678 :: Int
   gPtr <- sodiumAllocArray (sizeOf num1) 2
-  pokeElemOff (unGuardedPtr gPtr) 0 num1
-  pokeElemOff (unGuardedPtr gPtr) 1 num2
+  withForeignPtr (unGuardedPtr gPtr) $ \ptr -> do
+    pokeElemOff ptr 0 num1
+    pokeElemOff ptr 1 num2
 
-  peekElemOff (unGuardedPtr gPtr) 0 >>= (num1 @=?)
-  peekElemOff (unGuardedPtr gPtr) 1 >>= (num2 @=?)
-
-  -- Free memory
-  sodiumFree gPtr
-
+    peekElemOff ptr 0 >>= (num1 @=?)
+    peekElemOff ptr 1 >>= (num2 @=?)
 
 test_sodiumMProtect :: Assertion
 test_sodiumMProtect = do
   let num = 777 :: Int
   gPtr <- sodiumMAlloc (sizeOf num)
 
-  poke (unGuardedPtr gPtr) num
+  withForeignPtr (unGuardedPtr gPtr) $ \ptr -> do
+    poke ptr num
 
-  -- No access
-  sodiumMProtectNoAccess gPtr >>= ((Right True) @=?)
+    -- No access
+    sodiumMProtectNoAccess gPtr >>= ((Right True) @=?)
 
-  -- Readonly access
-  sodiumMProtectReadonly gPtr >>= ((Right True) @=?)
+    -- Readonly access
+    sodiumMProtectReadonly gPtr >>= ((Right True) @=?)
 
-  -- Read value
-  peek (unGuardedPtr gPtr) >>= (num @=?)
+    -- Read value
+    peek ptr >>= (num @=?)
 
-  -- Allow readwrite access again
-  sodiumMProtectReadWrite gPtr >>= ((Right True) @=?)
+    -- Allow readwrite access again
+    sodiumMProtectReadWrite gPtr >>= ((Right True) @=?)
 
-  -- Write value
-  poke (unGuardedPtr gPtr) (num + 1)
+    -- Write value
+    poke ptr (num + 1)
 
-  -- Read value
-  peek (unGuardedPtr gPtr) >>= ((num + 1) @=?)
-
-  sodiumFree gPtr
+    -- Read value
+    peek ptr >>= ((num + 1) @=?)
 
 test_randomBytesRandom :: Assertion
 test_randomBytesRandom = replicateM_ 1000 $ do
@@ -208,3 +206,11 @@ test_randomBytesStir = do
   -- Make sure random still works
   test_randomBytesRandom
   test_randomBytesUniform
+
+test_cryptoSecretBoxEasy :: Assertion
+test_cryptoSecretBoxEasy = do
+  let m = BS.pack "Secret message here!"
+  k <- newSecretBoxKey
+  n <- newSecretBoxNonce
+  let c = cryptoSecretBoxEasy m n k
+  --assertFailure $ show c

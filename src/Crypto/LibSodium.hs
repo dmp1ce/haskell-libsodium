@@ -20,6 +20,9 @@ import Foreign.Ptr
 import Foreign.ForeignPtr
 import Foreign.C.Types
 import Foreign.C.String
+import Data.Word
+import qualified Data.ByteString.Char8 as BS
+import System.IO.Unsafe ( unsafePerformIO )
 
 data InitResult = InitSuccess | InitFailure
                 | AlreadyInitialized | InitUnknown Int
@@ -31,7 +34,7 @@ data NumCompareResult = NumCompareGreaterThan | NumCompareLessThan
 
 -- | Pointer with guarded memory allocated by 'sodiumMAlloc'
 -- or 'sodiumAllocArray'
-newtype GuardedPtr a = GuardedPtr { unGuardedPtr :: Ptr a }
+newtype GuardedPtr a = GuardedPtr { unGuardedPtr :: ForeignPtr a }
 
 -- | <https://download.libsodium.org/doc/usage/ Documentation on when to use sodium_init>
 sodiumInit :: IO InitResult
@@ -204,24 +207,29 @@ sodiumMUnlock x = do
 -- overflows
 sodiumMAlloc :: Int -- ^ Bytes of memory to allocate
              -> IO (GuardedPtr a)
-sodiumMAlloc i = c'sodium_malloc (toEnum i) >>= return . GuardedPtr . castPtr
+sodiumMAlloc i = do
+  ptr <- c'sodium_malloc (toEnum i)
+  newForeignPtr p'sodium_free (castPtr ptr) >>=
+    (return . GuardedPtr . castForeignPtr)
 
 -- | Uses 'c'sodium_allocarray' to allocate an array of memory protected from
 -- overflows
 sodiumAllocArray :: Int -- ^ Bytes of memory to allocate per object
                  -> Int -- ^ Number of objects to allocate
                  -> IO (GuardedPtr a)
-sodiumAllocArray i j = c'sodium_allocarray (toEnum i) (toEnum j) >>=
-  return . GuardedPtr . castPtr
+sodiumAllocArray i j = do
+  ptr <- c'sodium_allocarray (toEnum i) (toEnum j)
+  newForeignPtr p'sodium_free (castPtr ptr) >>=
+    (return . GuardedPtr . castForeignPtr)
 
--- | Uses 'c'sodium_free' to deallocate memory allocated by libsodium
+-- | Uses 'c'sodium_free' to deallocate 'GuardedPtr' memory allocated
 sodiumFree :: GuardedPtr a -> IO ()
-sodiumFree (GuardedPtr ptr) = c'sodium_free (castPtr ptr)
+sodiumFree gPtr = finalizeForeignPtr (unGuardedPtr gPtr)
 
 -- | Uses 'c'sodium_mprotect_noaccess' to prevent access to a memory segment
 sodiumMProtectNoAccess :: GuardedPtr a -> IO (Either Int Bool)
-sodiumMProtectNoAccess gPtr = do
-  r <- c'sodium_mprotect_noaccess (castPtr $ unGuardedPtr gPtr)
+sodiumMProtectNoAccess gPtr = withForeignPtr (unGuardedPtr gPtr) $ \ptr -> do
+  r <- c'sodium_mprotect_noaccess (castPtr ptr)
   return $ case r of
     0 -> Right True
     i -> Left $ fromEnum i
@@ -229,8 +237,8 @@ sodiumMProtectNoAccess gPtr = do
 -- | Uses 'c'sodium_mprotect_readonly' to prevent write access
 -- to a memory segment
 sodiumMProtectReadonly :: GuardedPtr a -> IO (Either Int Bool)
-sodiumMProtectReadonly gPtr = do
-  r <- c'sodium_mprotect_readonly (castPtr $ unGuardedPtr gPtr)
+sodiumMProtectReadonly gPtr = withForeignPtr (unGuardedPtr gPtr) $ \ptr -> do
+  r <- c'sodium_mprotect_readonly (castPtr ptr)
   return $ case r of
     0 -> Right True
     i -> Left $ fromEnum i
@@ -238,8 +246,8 @@ sodiumMProtectReadonly gPtr = do
 -- | Uses 'c'sodium_mprotect_readwrite' to allow read and write access
 -- to a memory segment
 sodiumMProtectReadWrite :: GuardedPtr a -> IO (Either Int Bool)
-sodiumMProtectReadWrite gPtr = do
-  r <- c'sodium_mprotect_readwrite (castPtr $ unGuardedPtr gPtr)
+sodiumMProtectReadWrite gPtr = withForeignPtr (unGuardedPtr gPtr) $ \ptr -> do
+  r <- c'sodium_mprotect_readwrite (castPtr ptr)
   return $ case r of
     0 -> Right True
     i -> Left $ fromEnum i
@@ -275,3 +283,62 @@ randomBytesClose = do
 -- if it supports this operation.
 randomBytesStir :: IO ()
 randomBytesStir = c'randombytes_stir
+
+-- ** Secret-key authenticated encryption
+
+{- $
+Purpose:
+
+1. Encrypt a message with a key and a nonce to keep it confidential
+2. Compute an authentication tag. This tag is used to make sure that the message hasn't been tampered with before decrypting it.
+
+A single key is used both to encrypt\/sign and verify\/decrypt messages. For this reason, it is critical to keep the key confidential. Use 'newKey' to generate a new key.
+
+The nonce doesn't have to be confidential, but it should never ever be reused with the same key. Use 'newNonce' to generate a new Nonce.
+-}
+
+newtype SecretBoxKey = SecretBoxKey (GuardedPtr [Word8])
+
+newSecretBoxKey :: IO SecretBoxKey
+newSecretBoxKey = do
+  -- Guard key memory
+  gPtrKey <- sodiumMAlloc c'crypto_secretbox_KEYBYTES
+  withForeignPtr (unGuardedPtr gPtrKey) $ \ptr ->
+    c'randombytes_buf (castPtr ptr) (toEnum c'crypto_secretbox_KEYBYTES)
+  return $ SecretBoxKey gPtrKey
+
+newtype SecretBoxNonce = SecretBoxNonce (GuardedPtr [Word8])
+
+newSecretBoxNonce :: IO SecretBoxNonce
+newSecretBoxNonce = do
+  -- Guard nonce memory
+  gPtrKey <- sodiumMAlloc c'crypto_secretbox_NONCEBYTES
+  withForeignPtr (unGuardedPtr gPtrKey) $ \ptr ->
+    c'randombytes_buf (castPtr ptr) (toEnum c'crypto_secretbox_NONCEBYTES)
+  return $ SecretBoxNonce gPtrKey
+
+-- *** Combined mode
+
+-- | In combined mode, the authentication tag and the encrypted message are stored together. This is usually what you want.
+cryptoSecretBoxEasy :: BS.ByteString -- ^ Message
+                    -> SecretBoxNonce
+                    -> SecretBoxKey
+                    -> Maybe BS.ByteString
+                    -- ^ Cyphertext or @Nothing@ on error
+cryptoSecretBoxEasy m (SecretBoxNonce n) (SecretBoxKey k) = unsafePerformIO $ do
+  -- Determine length of cypher text
+  let mlen = BS.length m
+      clen = c'crypto_secretbox_MACBYTES + mlen
+  fPtrCypher <- mallocForeignPtrBytes (clen)
+  -- This message should probably be allocated in guarded memory
+  -- with a custom @Guarded@ function
+  BS.useAsCString m $ \ptrM ->
+    withForeignPtr fPtrCypher $ \ptrCypher ->
+      withForeignPtr (unGuardedPtr n) $ \ptrNonce ->
+        withForeignPtr (unGuardedPtr k) $ \ptrKey -> do
+
+    retEncrypt <- c'crypto_secretbox_easy ptrCypher (castPtr ptrM) (toEnum mlen) (castPtr ptrNonce) (castPtr ptrKey)
+
+    case retEncrypt of
+      0 -> BS.packCString (castPtr ptrCypher) >>= return . Just
+      _ -> return Nothing
