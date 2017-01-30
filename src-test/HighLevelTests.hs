@@ -2,7 +2,7 @@ module HighLevelTests where
 
 import Test.Tasty
 import Test.Tasty.HUnit
---import Test.Tasty.SmallCheck
+import Test.Tasty.SmallCheck
 
 import Crypto.LibSodium
 
@@ -33,7 +33,7 @@ hlTests =
   , testCase "randomBytesUniform" test_randomBytesUniform
   , testCase "randomBytesBuf" test_randomBytesBuf
   , testCase "randomBytesStir" test_randomBytesStir
-  , testCase "cryptoSecretBoxEasy" test_cryptoSecretBoxEasy
+  , testProperty "cryptoSecretBoxEasy" prop_cryptoSecretBoxEasy
   ]
 
 test_sodium_init :: Assertion
@@ -207,10 +207,17 @@ test_randomBytesStir = do
   test_randomBytesRandom
   test_randomBytesUniform
 
-test_cryptoSecretBoxEasy :: Assertion
-test_cryptoSecretBoxEasy = do
-  let m = BS.pack "Secret message here!"
+prop_cryptoSecretBoxEasy :: String -> Property IO
+prop_cryptoSecretBoxEasy message = monadic $ do
+  let m = BS.pack message
   k <- newSecretBoxKey
   n <- newSecretBoxNonce
-  let c = cryptoSecretBoxEasy m n k
-  --assertFailure $ show c
+  let (Right c) = cryptoSecretBoxEasy m n k
+      (Right c') = cryptoSecretBoxEasy m n k
+      eM = cryptoSecretBoxOpenEasy c n k
+  assertBool "Cyphertext appears to NOT be deterministic!" $ c == c'
+  case eM of
+    (Left i)   -> assertFailure $
+                  show i ++ " returned for message '" ++ message ++ "'"
+    (Right m') -> m' @?= m
+  return True

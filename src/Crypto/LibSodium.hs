@@ -323,9 +323,11 @@ newSecretBoxNonce = do
 cryptoSecretBoxEasy :: BS.ByteString -- ^ Message
                     -> SecretBoxNonce
                     -> SecretBoxKey
-                    -> Maybe BS.ByteString
-                    -- ^ Cyphertext or @Nothing@ on error
-cryptoSecretBoxEasy m (SecretBoxNonce n) (SecretBoxKey k) = unsafePerformIO $ do
+                    -> Either Int BS.ByteString
+                    -- ^ Cyphertext or error code from
+                    -- 'c'crypto_secretbox_easy'
+cryptoSecretBoxEasy m (SecretBoxNonce n) (SecretBoxKey k) =
+  unsafePerformIO $ do
   -- Determine length of cypher text
   let mlen = BS.length m
       clen = c'crypto_secretbox_MACBYTES + mlen
@@ -340,5 +342,32 @@ cryptoSecretBoxEasy m (SecretBoxNonce n) (SecretBoxKey k) = unsafePerformIO $ do
     retEncrypt <- c'crypto_secretbox_easy ptrCypher (castPtr ptrM) (toEnum mlen) (castPtr ptrNonce) (castPtr ptrKey)
 
     case retEncrypt of
-      0 -> BS.packCString (castPtr ptrCypher) >>= return . Just
-      _ -> return Nothing
+      0 -> BS.packCStringLen ((castPtr ptrCypher),clen) >>= return . Right
+      i -> return $ Left (fromEnum i)
+
+-- The 'cryptoSecretBoxOpenEasy' function verifies and decrypts a ciphertext produced by 'cryptoSecretBoxEasy'.
+cryptoSecretBoxOpenEasy :: BS.ByteString -- ^ Cyphertext
+                        -> SecretBoxNonce
+                        -> SecretBoxKey
+                        -> Either Int BS.ByteString
+                        -- ^ Message or error code from
+                        -- 'c'crypto_secretbox_open_easy'
+cryptoSecretBoxOpenEasy c (SecretBoxNonce n) (SecretBoxKey k) =
+  unsafePerformIO $ do
+  -- Determine length of cyphertext
+  let clen = BS.length c
+      mlen = clen - c'crypto_secretbox_MACBYTES
+  -- This message should probably be allocated in guarded memory
+  -- with a custom @Guarded@ function
+  fPtrMessage <- mallocForeignPtrBytes (clen)
+  withForeignPtr fPtrMessage $ \ptrMessage ->
+    BS.useAsCString c $ \ptrC ->
+      withForeignPtr (unGuardedPtr n) $ \ptrNonce ->
+        withForeignPtr (unGuardedPtr k) $ \ptrKey -> do
+
+    retDecrypt <- c'crypto_secretbox_open_easy ptrMessage (castPtr ptrC)
+                  (toEnum clen) (castPtr ptrNonce) (castPtr ptrKey)
+
+    case retDecrypt of
+      0 -> BS.packCStringLen ((castPtr ptrMessage), mlen) >>= return . Right
+      i -> return $ Left (fromEnum i)
