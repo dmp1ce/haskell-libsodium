@@ -2,7 +2,9 @@ module BindingTests where
 
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.SmallCheck
+import qualified Test.Tasty.QuickCheck as QC
+import qualified Test.QuickCheck.Monadic as QC
+import qualified Test.Tasty.SmallCheck as SC
 
 import Bindings.LibSodium
 
@@ -12,17 +14,18 @@ import Foreign.C.String
 import Foreign.Storable
 import Foreign.Ptr
 import Foreign.Marshal.Array
-import Data.Bits
 import Data.Word
 import System.Process
 import System.Exit
 import Control.Monad
+import Numeric (showHex)
+import qualified Data.Text as T
 
 bindingTests :: [TestTree]
 bindingTests =
   [ testCase "c'sodium_init" test_c'sodium_init
   , testCase "c'sodium_memcmp" test_c'sodium_memcmp
-  , testCase "c'sodium_bin2hex" test_c'sodium_bin2hex
+  , QC.testProperty "c'sodium_bin2hex" prop_c'sodium_bin2hex
   , testCase "c'sodium_hex2bin" test_c'sodium_hex2bin
   , testCase "hex2bin_bin2hex" test_hex2bin_bin2hex
   , testCase "c'sodium_increment" test_c'sodium_increment
@@ -42,7 +45,7 @@ bindingTests =
   , testCase "c'randombytes_uniform" test_c'randombytes_uniform
   , testCase "c'randombytes_buf" test_c'randombytes_buf
   , testCase "c'randombytes_stir" test_c'randombytes_buf
-  , testProperty "c'cypto_secretbox_easy_property" prop_c'crypto_secretbox_easy
+  , SC.testProperty "c'cypto_secretbox_easy" prop_c'crypto_secretbox_easy
   ]
 
 test_c'sodium_init :: Assertion
@@ -80,12 +83,15 @@ test_c'sodium_memcmp = do
     r4 <- c'sodium_memcmp (castPtr ptr1) (castPtr ptr2) (toEnum v1_size)
     r4 @?= 0
 
-test_c'sodium_bin2hex :: Assertion
-test_c'sodium_bin2hex = do
-  fPtrBin <- mallocForeignPtr :: IO (ForeignPtr Word)
-  fPtrHex <- mallocForeignPtr :: IO (ForeignPtr CChar)
-  withForeignPtr fPtrBin $ \ptrBin -> withForeignPtr fPtrHex $ \ptrHex -> do
-    poke ptrBin $ bit 6 .|. bit 7
+prop_c'sodium_bin2hex :: QC.NonNegative (QC.Large Word) -> QC.Property
+prop_c'sodium_bin2hex (QC.NonNegative (QC.Large i)) = QC.monadicIO $ do
+  fPtrBin <- QC.run $ mallocForeignPtr :: QC.PropertyM IO (ForeignPtr Word)
+  fPtrHex <- QC.run $ mallocForeignPtr :: QC.PropertyM IO (ForeignPtr CChar)
+
+  res <- QC.run $ withForeignPtr fPtrBin $ \ptrBin ->
+    withForeignPtr fPtrHex $ \ptrHex -> do
+
+    poke ptrBin i
     binSize <- peek ptrBin >>= return . sizeOf
     let hexSize = binSize * 2 + 1
 
@@ -95,9 +101,21 @@ test_c'sodium_bin2hex = do
     resValue <- peekCAString res
     hexValue <- peekCAString ptrHex
 
-    assertEqual "Return and hex memory addresses are the same" ptrHex res
-    assertEqual "Return and hex argument are not equal" resValue hexValue
-    hexValue @?= "c000000000000000"
+    assertEqual "Return and hex memory addresses are NOT equal" ptrHex res
+    assertEqual "Return value and hex values are NOT equal" resValue hexValue
+
+    -- For whatever reason, bin2hex prints hexadecimal in reverse order
+    -- than most deximal converters do, including @Numeric.showHex@.
+    return $ (T.dropAround ('0'==) $ T.pack $ reverseHex hexValue) ==
+      (T.dropAround ('0'==) $ T.pack (showHex i "") )
+
+  QC.assert res
+
+  where
+    reverseHex :: [a] -> [a]
+    reverseHex (x1:x2:xs) = (reverseHex xs) ++ [x1,x2]
+    reverseHex xs = xs
+
 
 test_c'sodium_hex2bin :: Assertion
 test_c'sodium_hex2bin = do
@@ -132,7 +150,7 @@ test_hex2bin_bin2hex = do
   fPtrBin <- mallocForeignPtr :: IO (ForeignPtr CUInt)
   fPtrBinLen <- mallocForeignPtr :: IO (ForeignPtr CSize)
   fPtrHexEnd <- mallocForeignPtr :: IO (ForeignPtr (Ptr CChar))
-  let hexString = "11110c00"
+  let hexString = showHex (286329856::Integer) ""
       hexLength = length hexString
 
   withForeignPtr fPtrBin $ \ptrBin ->
@@ -337,8 +355,8 @@ test_c'randombytes_stir = do
   test_c'randombytes_uniform
 
 -- Verify that random messages encrypt and then decrypt
-prop_c'crypto_secretbox_easy :: String -> Property IO
-prop_c'crypto_secretbox_easy message = monadic $ do
+prop_c'crypto_secretbox_easy :: String -> SC.Property IO
+prop_c'crypto_secretbox_easy message = SC.monadic $ do
   withCString message $ \ptrMessage -> do
     -- Length in bytes of message
     mlen <- lengthArray0 (castCharToCChar '\NUL') ptrMessage
