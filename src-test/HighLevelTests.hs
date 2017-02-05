@@ -2,7 +2,8 @@ module HighLevelTests where
 
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.SmallCheck
+import qualified Test.Tasty.SmallCheck as SC
+import qualified Test.Tasty.QuickCheck as QC
 
 import Crypto.LibSodium
 
@@ -12,13 +13,17 @@ import Foreign.ForeignPtr
 import Foreign.Storable
 import Data.Bits
 import Control.Monad
+import Numeric
 import qualified Data.ByteString.Char8 as BS
+
+import TestHelpers
 
 hlTests :: [TestTree]
 hlTests =
   [ testCase "sodiumInit" test_sodium_init
   , testCase "sodiumMemcmp" test_sodium_memcmp
   , testCase "sodiumBin2Hex" test_sodiumBin2Hex
+  , QC.testProperty "sodiumBin2Hex" prop_sodiumBin2Hex
   , testCase "sodiumHex2Bin" test_sodiumHex2Bin
   , testCase "sodiumHex2Bin_Bin2Hex" test_sodiumHex2Bin_Bin2Hex
   , testCase "sodiumIncrement" test_sodiumIncrement
@@ -33,7 +38,7 @@ hlTests =
   , testCase "randomBytesUniform" test_randomBytesUniform
   , testCase "randomBytesBuf" test_randomBytesBuf
   , testCase "randomBytesStir" test_randomBytesStir
-  , testProperty "cryptoSecretBoxEasy" prop_cryptoSecretBoxEasy
+  , SC.testProperty "cryptoSecretBoxEasy" prop_cryptoSecretBoxEasy
   ]
 
 test_sodium_init :: Assertion
@@ -57,10 +62,10 @@ test_sodium_memcmp = do
     r2 <- sodiumMemcmp ptr2 ptr2
     r2 @?= Right True
 
-test_sodiumBin2Hex :: Assertion
-test_sodiumBin2Hex = do
-  res <- sodiumBin2Hex ((bit 0) :: Word)
-  res @?= "0100000000000000"
+prop_sodiumBin2Hex :: QC.NonNegative (QC.Large Word) -> Bool
+prop_sodiumBin2Hex (QC.NonNegative (QC.Large i)) =
+  let h = sodiumBin2Hex (i :: Word)
+  in  isHexEqual (convertEndian h) (showHex i "")
 
 test_sodiumHex2Bin :: Assertion
 test_sodiumHex2Bin = do
@@ -71,7 +76,7 @@ test_sodiumHex2Bin_Bin2Hex :: Assertion
 test_sodiumHex2Bin_Bin2Hex = do
   let hex = "11001cd0fffffffc"
   bin <- sodiumHex2Bin hex :: IO Word
-  hexResult <- sodiumBin2Hex bin
+  let hexResult = sodiumBin2Hex bin
   hexResult @?= hex
 
 test_sodiumIncrement :: Assertion
@@ -207,8 +212,8 @@ test_randomBytesStir = do
   test_randomBytesRandom
   test_randomBytesUniform
 
-prop_cryptoSecretBoxEasy :: String -> Property IO
-prop_cryptoSecretBoxEasy message = monadic $ do
+prop_cryptoSecretBoxEasy :: String -> SC.Property IO
+prop_cryptoSecretBoxEasy message = SC.monadic $ do
   let m = BS.pack message
   k <- newSecretBoxKey
   n <- newSecretBoxNonce

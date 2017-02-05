@@ -33,11 +33,11 @@ module Bindings.LibSodium where
 
 -- *** Hexadecimal encoding/decoding
 
--- | convert string from binary to hexidecimal
+-- | convert string from binary to (little-endian) hexadecimal
 #ccall sodium_bin2hex, Ptr CChar -> CSize -> Ptr () -> CSize -> IO CString
 -- |
 
--- | convert string from hexidecimal to binary
+-- | convert string from hexadecimal to binary
 #ccall sodium_hex2bin, Ptr CUChar -> CSize -> \
                        Ptr CChar -> CSize -> \
                        Ptr CChar -> Ptr CSize -> \

@@ -53,6 +53,7 @@ test-suite libsodium-test
   main-is:           Main.hs
   other-modules:     BindingTests
                    , HighLevelTests
+                   , TestHelpers
   build-depends:     base >= 4.8 && < 5
                    , tasty >= 0.11
                    , tasty-hunit >= 0.9

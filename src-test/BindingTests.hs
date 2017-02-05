@@ -19,7 +19,8 @@ import System.Process
 import System.Exit
 import Control.Monad
 import Numeric (showHex)
-import qualified Data.Text as T
+
+import TestHelpers
 
 bindingTests :: [TestTree]
 bindingTests =
@@ -106,16 +107,9 @@ prop_c'sodium_bin2hex (QC.NonNegative (QC.Large i)) = QC.monadicIO $ do
 
     -- For whatever reason, bin2hex prints hexadecimal in little endian
     -- but most converters use big endian, including @Numeric.showHex@.
-    return $ (T.dropAround ('0'==) $ T.pack $ convertEndian hexValue) ==
-      (T.dropAround ('0'==) $ T.pack (showHex i "") )
+    return $ isHexEqual (convertEndian hexValue) (showHex i "")
 
   QC.assert res
-
-  where
-    convertEndian :: [a] -> [a]
-    convertEndian (x1:x2:xs) = (convertEndian xs) ++ [x1,x2]
-    convertEndian xs = xs
-
 
 test_c'sodium_hex2bin :: Assertion
 test_c'sodium_hex2bin = do

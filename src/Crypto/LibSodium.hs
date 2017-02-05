@@ -67,8 +67,8 @@ sodiumMemcmp p1 p2 =
 -- *** Hexadecimal encoding/decoding
 
 -- | Uses 'c'sodium_bin2hex' to convert a 'Storable' into a hexadecimal 'String'
-sodiumBin2Hex :: (Storable s) => s -> IO String
-sodiumBin2Hex bits = do
+sodiumBin2Hex :: (Storable s) => s -> String
+sodiumBin2Hex bits = unsafePerformIO $ do
   fPtrBin <- mallocForeignPtrBytes (sizeOf bits)
   fPtrHex <- mallocForeignPtr :: IO (ForeignPtr CChar)
   withForeignPtr fPtrBin $ \ptrBin -> withForeignPtr fPtrHex $ \ptrHex -> do
