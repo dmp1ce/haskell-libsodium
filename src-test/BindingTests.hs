@@ -104,17 +104,17 @@ prop_c'sodium_bin2hex (QC.NonNegative (QC.Large i)) = QC.monadicIO $ do
     assertEqual "Return and hex memory addresses are NOT equal" ptrHex res
     assertEqual "Return value and hex values are NOT equal" resValue hexValue
 
-    -- For whatever reason, bin2hex prints hexadecimal in reverse order
-    -- than most deximal converters do, including @Numeric.showHex@.
-    return $ (T.dropAround ('0'==) $ T.pack $ reverseHex hexValue) ==
+    -- For whatever reason, bin2hex prints hexadecimal in little endian
+    -- but most converters use big endian, including @Numeric.showHex@.
+    return $ (T.dropAround ('0'==) $ T.pack $ convertEndian hexValue) ==
       (T.dropAround ('0'==) $ T.pack (showHex i "") )
 
   QC.assert res
 
   where
-    reverseHex :: [a] -> [a]
-    reverseHex (x1:x2:xs) = (reverseHex xs) ++ [x1,x2]
-    reverseHex xs = xs
+    convertEndian :: [a] -> [a]
+    convertEndian (x1:x2:xs) = (convertEndian xs) ++ [x1,x2]
+    convertEndian xs = xs
 
 
 test_c'sodium_hex2bin :: Assertion
