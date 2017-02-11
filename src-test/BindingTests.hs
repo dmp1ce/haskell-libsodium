@@ -27,7 +27,7 @@ bindingTests =
   [ testCase "c'sodium_init" test_c'sodium_init
   , testCase "c'sodium_memcmp" test_c'sodium_memcmp
   , QC.testProperty "c'sodium_bin2hex" prop_c'sodium_bin2hex
-  , testCase "c'sodium_hex2bin" test_c'sodium_hex2bin
+  , QC.testProperty "c'sodium_hex2bin" prop_c'sodium_hex2bin
   , testCase "hex2bin_bin2hex" test_hex2bin_bin2hex
   , testCase "c'sodium_increment" test_c'sodium_increment
   , testCase "c'sodium_add" test_c'sodium_add
@@ -111,33 +111,36 @@ prop_c'sodium_bin2hex (QC.NonNegative (QC.Large i)) = QC.monadicIO $ do
 
   QC.assert res
 
-test_c'sodium_hex2bin :: Assertion
-test_c'sodium_hex2bin = do
-  fPtrBin <- mallocForeignPtr :: IO (ForeignPtr CUInt)
-  fPtrBinLen <- mallocForeignPtr :: IO (ForeignPtr CSize)
-  fPtrHexEnd <- mallocForeignPtr :: IO (ForeignPtr (Ptr CChar))
-  let hexString = "1111zblah"
+prop_c'sodium_hex2bin :: QC.NonNegative (QC.Large CUInt)
+                      -> SafeString
+                      -> QC.Property
+prop_c'sodium_hex2bin (QC.NonNegative (QC.Large i)) (SafeString s) =
+  QC.monadicIO $ do
+  let hexString = (padHex $ showHex i "") ++ '-':s
       hexLength = length hexString
+      binMax = (hexLength `div` 2) + 1
+  fPtrBin <- QC.run $ mallocForeignPtrArray binMax :: QC.PropertyM IO (ForeignPtr CUChar)
+  fPtrBinLen <- QC.run $ mallocForeignPtr :: QC.PropertyM IO (ForeignPtr CSize)
+  fPtrHexEnd <- QC.run $ mallocForeignPtr :: QC.PropertyM IO (ForeignPtr (Ptr CChar))
 
-  withForeignPtr fPtrBin $ \ptrBin ->
+  (res, binValue, hexEndValue) <-
+    QC.run $ withForeignPtr fPtrBin $ \ptrBin ->
     withCString hexString $ \ptrHex ->
       withForeignPtr fPtrBinLen $ \ptrBinLen ->
         withForeignPtr fPtrHexEnd $ \ptrHexEnd -> do
 
-    binSizeMax <- peek ptrBin >>= return . sizeOf
-
-    res <- c'sodium_hex2bin (castPtr ptrBin) (toEnum binSizeMax)
+    res <- c'sodium_hex2bin (castPtr ptrBin) (toEnum hexLength)
                             ptrHex (toEnum hexLength) nullPtr
                             ptrBinLen ptrHexEnd
 
-    binValue    <- peek ptrBin
     binLenValue <- peek ptrBinLen
+    binValue    <- peekArray (fromEnum binLenValue) ptrBin
     hexEndValue <- peek ptrHexEnd >>= peekCAString
+    return (res, binValue, hexEndValue)
 
-    res @?= 0
-    binValue @?= 4369
-    binLenValue @?= 2
-    hexEndValue @?= "zblah"
+  QC.assert $ res == 0
+  QC.assert $ (padHex $ showHexCUCharList binValue) == (padHex $ showHex i "")
+  QC.assert $ hexEndValue == "-" ++ s
 
 test_hex2bin_bin2hex :: Assertion
 test_hex2bin_bin2hex = do

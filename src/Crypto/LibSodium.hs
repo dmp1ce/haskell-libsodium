@@ -23,6 +23,7 @@ import Foreign.C.String
 import Data.Word
 import qualified Data.ByteString.Char8 as BS
 import System.IO.Unsafe ( unsafePerformIO )
+import Foreign.Marshal.Array
 
 data InitResult = InitSuccess | InitFailure
                 | AlreadyInitialized | InitUnknown Int
@@ -79,13 +80,13 @@ sodiumBin2Hex bits = unsafePerformIO $ do
                      (castPtr ptrBin) (toEnum binSize) >>=
       peekCAString
 
--- | Uses 'c'sodium_hex2bin' to convert a hexadecimal 'String' to a 'Storable'
--- Be careful with this function! Some error cases are not checked.
--- Such as invalid hexadecimal values or overflow cases.
-sodiumHex2Bin :: (Storable s) => String -> IO s
-sodiumHex2Bin hex = do
+-- | Uses 'c'sodium_hex2bin' to convert a hexadecimal 'String' to a list of
+-- 'CUChar' with the remaining unparsed as a 'String'
+sodiumHex2Bin :: String -> ([CUChar], String)
+sodiumHex2Bin hex = unsafePerformIO $ do
   let hexLength = length hex
-  fPtrBin <- mallocForeignPtrBytes ((hexLength `div` 2)+1)
+      binMax = (hexLength `div` 2)+1
+  fPtrBin <- mallocForeignPtrArray binMax :: IO (ForeignPtr CUChar)
   fPtrBinLen <- mallocForeignPtr :: IO (ForeignPtr CSize)
   fPtrHexEnd <- mallocForeignPtr :: IO (ForeignPtr (Ptr CChar))
 
@@ -94,13 +95,19 @@ sodiumHex2Bin hex = do
       withForeignPtr fPtrBinLen $ \ptrBinLen ->
         withForeignPtr fPtrHexEnd $ \ptrHexEnd -> do
 
-    binSizeMax <- peek ptrBin >>= return . sizeOf
-    _ <- c'sodium_hex2bin (castPtr ptrBin) (toEnum binSizeMax)
+    res <- c'sodium_hex2bin (castPtr ptrBin) (toEnum binMax)
                             ptrHex (toEnum hexLength) nullPtr
                             ptrBinLen ptrHexEnd
 
-    binValue <- peek ptrBin
-    return binValue
+    case res of
+      0 -> return ()
+      i -> error $ "Invalid return: " ++ show i
+
+    --binValue <- peek ptrBin
+    binLenValue <- peek ptrBinLen
+    binValue    <- peekArray (fromEnum binLenValue) ptrBin
+    hexEndValue <- peek ptrHexEnd >>= peekCAString
+    return (binValue, hexEndValue)
 
 -- *** Incrementing large numbers
 

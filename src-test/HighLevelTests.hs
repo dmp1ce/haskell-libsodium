@@ -9,9 +9,7 @@ import Crypto.LibSodium
 
 import Foreign.C.Types
 import Foreign.ForeignPtr
---import Foreign.Ptr
 import Foreign.Storable
-import Data.Bits
 import Control.Monad
 import Numeric
 import qualified Data.ByteString.Char8 as BS
@@ -22,9 +20,8 @@ hlTests :: [TestTree]
 hlTests =
   [ testCase "sodiumInit" test_sodium_init
   , testCase "sodiumMemcmp" test_sodium_memcmp
-  , testCase "sodiumBin2Hex" test_sodiumBin2Hex
   , QC.testProperty "sodiumBin2Hex" prop_sodiumBin2Hex
-  , testCase "sodiumHex2Bin" test_sodiumHex2Bin
+  , QC.testProperty "sodiumHex2Bin" prop_sodiumHex2Bin
   , testCase "sodiumHex2Bin_Bin2Hex" test_sodiumHex2Bin_Bin2Hex
   , testCase "sodiumIncrement" test_sodiumIncrement
   , testCase "sodiumAdd" test_sodiumAdd
@@ -67,16 +64,18 @@ prop_sodiumBin2Hex (QC.NonNegative (QC.Large i)) =
   let h = sodiumBin2Hex (i :: Word)
   in  isHexEqual (convertEndian h) (showHex i "")
 
-test_sodiumHex2Bin :: Assertion
-test_sodiumHex2Bin = do
-  res <- sodiumHex2Bin "11" :: IO CUInt
-  res @?= 17
+prop_sodiumHex2Bin :: QC.NonNegative (QC.Large Word) -> Bool
+prop_sodiumHex2Bin (QC.NonNegative (QC.Large i)) =
+  let hexStart = padHex $ showHex i ""
+      (binList,_) = sodiumHex2Bin hexStart
+  in  isHexEqual (showHexCUCharList binList) hexStart
 
 test_sodiumHex2Bin_Bin2Hex :: Assertion
 test_sodiumHex2Bin_Bin2Hex = do
-  let hex = "11001cd0fffffffc"
-  bin <- sodiumHex2Bin hex :: IO Word
-  let hexResult = sodiumBin2Hex bin
+  let hex = "1c"
+      ([bin],s) = sodiumHex2Bin hex
+      hexResult = sodiumBin2Hex bin
+  s @?= ""
   hexResult @?= hex
 
 test_sodiumIncrement :: Assertion
