@@ -19,6 +19,7 @@ import System.Process
 import System.Exit
 import Control.Monad
 import Numeric (showHex)
+import Text.Printf
 
 import TestHelpers
 
@@ -28,7 +29,7 @@ bindingTests =
   , testCase "c'sodium_memcmp" test_c'sodium_memcmp
   , QC.testProperty "c'sodium_bin2hex" prop_c'sodium_bin2hex
   , QC.testProperty "c'sodium_hex2bin" prop_c'sodium_hex2bin
-  , testCase "hex2bin_bin2hex" test_hex2bin_bin2hex
+  , QC.testProperty "hex2bin_bin2hex" prop_hex2bin_bin2hex
   , testCase "c'sodium_increment" test_c'sodium_increment
   , testCase "c'sodium_add" test_c'sodium_add
   , testCase "c'sodium_compare" test_c'sodium_compare
@@ -142,15 +143,19 @@ prop_c'sodium_hex2bin (QC.NonNegative (QC.Large i)) (SafeString s) =
   QC.assert $ (padHex $ showHexCUCharList binValue) == (padHex $ showHex i "")
   QC.assert $ hexEndValue == "-" ++ s
 
-test_hex2bin_bin2hex :: Assertion
-test_hex2bin_bin2hex = do
-  fPtrBin <- mallocForeignPtr :: IO (ForeignPtr CUInt)
-  fPtrBinLen <- mallocForeignPtr :: IO (ForeignPtr CSize)
-  fPtrHexEnd <- mallocForeignPtr :: IO (ForeignPtr (Ptr CChar))
-  let hexString = showHex (286329856::Integer) ""
+prop_hex2bin_bin2hex :: QC.NonNegative (QC.Large CUInt)
+                     -> QC.Property
+prop_hex2bin_bin2hex (QC.NonNegative (QC.Large i)) =
+  QC.monadicIO $ do
+  fPtrBin <- QC.run $ mallocForeignPtr :: QC.PropertyM IO (ForeignPtr CUInt)
+  fPtrBinLen <-
+    QC.run $ mallocForeignPtr :: QC.PropertyM IO (ForeignPtr CSize)
+  fPtrHexEnd <-
+    QC.run $ mallocForeignPtr :: QC.PropertyM IO (ForeignPtr (Ptr CChar))
+  let hexString = printf "%08s" $ showHex (i::CUInt) ""
       hexLength = length hexString
 
-  withForeignPtr fPtrBin $ \ptrBin ->
+  resValue <- QC.run $ withForeignPtr fPtrBin $ \ptrBin ->
     withCString hexString $ \ptrHex ->
       withForeignPtr fPtrBinLen $ \ptrBinLen ->
         withForeignPtr fPtrHexEnd $ \ptrHexEnd -> do
@@ -167,9 +172,9 @@ test_hex2bin_bin2hex = do
     let hexSize = binSize' * 2 + 1
     res <- c'sodium_bin2hex ptrHex (toEnum hexSize)
                             (castPtr ptrBin) (toEnum binSize')
-    resValue <- peekCAString res
+    peekCAString res
 
-    resValue @?= hexString
+  QC.assert $ resValue == hexString
 
 test_c'sodium_increment :: Assertion
 test_c'sodium_increment = do

@@ -13,6 +13,7 @@ import Foreign.Storable
 import Control.Monad
 import Numeric
 import qualified Data.ByteString.Char8 as BS
+import Text.Printf
 
 import TestHelpers
 
@@ -22,7 +23,7 @@ hlTests =
   , testCase "sodiumMemcmp" test_sodium_memcmp
   , QC.testProperty "sodiumBin2Hex" prop_sodiumBin2Hex
   , QC.testProperty "sodiumHex2Bin" prop_sodiumHex2Bin
-  , testCase "sodiumHex2Bin_Bin2Hex" test_sodiumHex2Bin_Bin2Hex
+  , QC.testProperty "sodiumHex2Bin_Bin2Hex" prop_sodiumHex2Bin_Bin2Hex
   , testCase "sodiumIncrement" test_sodiumIncrement
   , testCase "sodiumAdd" test_sodiumAdd
   , testCase "sodiumCompare" test_sodiumCompare
@@ -70,13 +71,12 @@ prop_sodiumHex2Bin (QC.NonNegative (QC.Large i)) =
       (binList,_) = sodiumHex2Bin hexStart
   in  isHexEqual (showHexCUCharList binList) hexStart
 
-test_sodiumHex2Bin_Bin2Hex :: Assertion
-test_sodiumHex2Bin_Bin2Hex = do
-  let hex = "1c"
-      ([bin],s) = sodiumHex2Bin hex
-      hexResult = sodiumBin2Hex bin
-  s @?= ""
-  hexResult @?= hex
+prop_sodiumHex2Bin_Bin2Hex :: QC.NonNegative (QC.Large Word) -> Bool
+prop_sodiumHex2Bin_Bin2Hex (QC.NonNegative (QC.Large i)) =
+  let hex = printf "%016s" $ showHex i ""
+      (binList,s) = sodiumHex2Bin hex
+      hexResult = sodiumBin2Hex $ convertCUCharListToWord binList
+  in  (s == "") && (hexResult == (convertEndian hex))
 
 test_sodiumIncrement :: Assertion
 test_sodiumIncrement = do
