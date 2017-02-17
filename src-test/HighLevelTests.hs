@@ -2,8 +2,8 @@ module HighLevelTests where
 
 import Test.Tasty
 import Test.Tasty.HUnit
-import qualified Test.Tasty.SmallCheck as SC
 import qualified Test.Tasty.QuickCheck as QC
+import qualified Test.QuickCheck.Monadic as QC
 
 import Crypto.LibSodium
 
@@ -36,7 +36,7 @@ hlTests =
   , testCase "randomBytesUniform" test_randomBytesUniform
   , testCase "randomBytesBuf" test_randomBytesBuf
   , testCase "randomBytesStir" test_randomBytesStir
-  , SC.testProperty "cryptoSecretBoxEasy" prop_cryptoSecretBoxEasy
+  , QC.testProperty "cryptoSecretBoxEasy'" prop_cryptoSecretBoxEasy'
   ]
 
 test_sodium_init :: Assertion
@@ -211,17 +211,16 @@ test_randomBytesStir = do
   test_randomBytesRandom
   test_randomBytesUniform
 
-prop_cryptoSecretBoxEasy :: String -> SC.Property IO
-prop_cryptoSecretBoxEasy message = SC.monadic $ do
+prop_cryptoSecretBoxEasy' :: String -> QC.Property
+prop_cryptoSecretBoxEasy' message = QC.monadicIO $ do
   let m = BS.pack message
-  k <- newSecretBoxKey
-  n <- newSecretBoxNonce
+  k <- QC.run $ newSecretBoxKey
+  n <- QC.run $ newSecretBoxNonce
   let (Right c) = cryptoSecretBoxEasy m n k
       (Right c') = cryptoSecretBoxEasy m n k
       eM = cryptoSecretBoxOpenEasy c n k
-  assertBool "Cyphertext appears to NOT be deterministic!" $ c == c'
+  QC.assert $ c == c'
   case eM of
-    (Left i)   -> assertFailure $
-                  show i ++ " returned for message '" ++ message ++ "'"
-    (Right m') -> m' @?= m
-  return True
+    (Left _)   -> QC.assert $ False
+                  --show i ++ " returned for message '" ++ message ++ "'"
+    (Right m') -> QC.assert $ m' == m

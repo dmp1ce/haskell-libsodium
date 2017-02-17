@@ -4,7 +4,6 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import qualified Test.Tasty.QuickCheck as QC
 import qualified Test.QuickCheck.Monadic as QC
-import qualified Test.Tasty.SmallCheck as SC
 
 import Bindings.LibSodium
 
@@ -47,7 +46,7 @@ bindingTests =
   , testCase "c'randombytes_uniform" test_c'randombytes_uniform
   , testCase "c'randombytes_buf" test_c'randombytes_buf
   , testCase "c'randombytes_stir" test_c'randombytes_buf
-  , SC.testProperty "c'cypto_secretbox_easy" prop_c'crypto_secretbox_easy
+  , QC.testProperty "c'cypto_secretbox_easy" prop_c'crypto_secretbox_easy
   ]
 
 test_c'sodium_init :: Assertion
@@ -357,11 +356,9 @@ test_c'randombytes_stir = do
   test_c'randombytes_uniform
 
 -- Verify that random messages encrypt and then decrypt
-prop_c'crypto_secretbox_easy :: String -> SC.Property IO
-prop_c'crypto_secretbox_easy message = SC.monadic $ do
-  withCString message $ \ptrMessage -> do
-    -- Length in bytes of message
-    mlen <- lengthArray0 (castCharToCChar '\NUL') ptrMessage
+prop_c'crypto_secretbox_easy :: String -> QC.Property
+prop_c'crypto_secretbox_easy message = QC.monadicIO $ do
+  m <- QC.run $ withCStringLen message $ \(ptrMessage, mlen) -> do
     let clen = c'crypto_secretbox_MACBYTES + mlen
     fPtrCypher <- mallocForeignPtrBytes (clen)
     fPtrNonce <- mallocForeignPtrBytes (c'crypto_secretbox_NONCEBYTES)
@@ -381,8 +378,9 @@ prop_c'crypto_secretbox_easy message = SC.monadic $ do
         0 -> return ()
         i -> assertFailure $ "Decrypt returned: " ++ show i
 
-      peekCString ptrMessage >>= (message @=?)
-  return True
+      peekCStringLen (ptrMessage, mlen)
+  QC.assert (m == message)
+
 
 -- Can be used to look at raw bit list for debugging
 --bitList :: (Bits b) => b -> Maybe [Bool]
