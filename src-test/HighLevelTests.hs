@@ -37,6 +37,7 @@ hlTests =
   , testCase "randomBytesBuf" test_randomBytesBuf
   , testCase "randomBytesStir" test_randomBytesStir
   , QC.testProperty "cryptoSecretBoxEasy" prop_cryptoSecretBoxEasy
+  , QC.testProperty "cryptoSecretBoxDetached" prop_cryptoSecretBoxDetached
   ]
 
 test_sodium_init :: Assertion
@@ -220,6 +221,21 @@ prop_cryptoSecretBoxEasy message = QC.monadicIO $ do
       (Right c') = cryptoSecretBoxEasy m n k
       eM = cryptoSecretBoxOpenEasy c n k
   QC.assert $ c == c'
+  case eM of
+    (Left i)   -> QC.run $ assertFailure $
+                  show i ++ " returned for message '" ++ message ++ "'"
+    (Right m') -> QC.assert $ m' == m
+
+prop_cryptoSecretBoxDetached :: String -> QC.Property
+prop_cryptoSecretBoxDetached message = QC.monadicIO $ do
+  let m = BS.pack message
+  k <- QC.run $ newSecretBoxKey
+  n <- QC.run $ newSecretBoxNonce
+  let (Right (c, mac)) = cryptoSecretBoxDetached m n k
+      (Right (c', mac')) = cryptoSecretBoxDetached m n k
+      eM = cryptoSecretBoxOpenDetached c mac n k
+  QC.assert $ c == c'
+  QC.assert $ mac == mac'
   case eM of
     (Left i)   -> QC.run $ assertFailure $
                   show i ++ " returned for message '" ++ message ++ "'"

@@ -47,6 +47,8 @@ bindingTests =
   , testCase "c'randombytes_buf" test_c'randombytes_buf
   , testCase "c'randombytes_stir" test_c'randombytes_buf
   , QC.testProperty "c'cypto_secretbox_easy" prop_c'crypto_secretbox_easy
+  , QC.testProperty "c'cypto_secretbox_detached"
+                    prop_c'crypto_secretbox_detached
   ]
 
 test_c'sodium_init :: Assertion
@@ -381,6 +383,35 @@ prop_c'crypto_secretbox_easy message = QC.monadicIO $ do
       peekCStringLen (ptrMessage, mlen)
   QC.assert (m == message)
 
+-- Verify that random messages encrypt and then decrypt
+prop_c'crypto_secretbox_detached :: String -> QC.Property
+prop_c'crypto_secretbox_detached message = QC.monadicIO $ do
+  m <- QC.run $ withCStringLen message $ \(ptrMessage, mlen) -> do
+    fPtrMac <- mallocForeignPtrBytes c'crypto_secretbox_MACBYTES
+    fPtrCypher <- mallocForeignPtrBytes (mlen)
+    fPtrNonce <- mallocForeignPtrBytes (c'crypto_secretbox_NONCEBYTES)
+    fPtrKey <- mallocForeignPtrBytes (c'crypto_secretbox_KEYBYTES)
+    withForeignPtr fPtrCypher $ \ptrCypher ->
+      withForeignPtr fPtrNonce $ \ptrNonce ->
+        withForeignPtr fPtrKey $ \ptrKey ->
+          withForeignPtr fPtrMac $ \ptrMac -> do
+      retEncrypt <- c'crypto_secretbox_detached ptrCypher ptrMac
+                    (castPtr ptrMessage) (toEnum mlen) ptrNonce ptrKey
+      case retEncrypt of
+        0 -> return ()
+        i -> assertFailure $ "Encrypt returned: " ++ show i
+
+      -- See if we get the message back out
+      c'sodium_memzero (castPtr ptrMessage) (toEnum mlen)
+      retDecrypt <-
+        c'crypto_secretbox_open_detached (castPtr ptrMessage) ptrCypher ptrMac
+          (toEnum mlen) ptrNonce ptrKey
+      case retDecrypt of
+        0 -> return ()
+        i -> assertFailure $ "Decrypt returned: " ++ show i
+
+      peekCStringLen (ptrMessage, mlen)
+  QC.assert (m == message)
 
 -- Can be used to look at raw bit list for debugging
 --bitList :: (Bits b) => b -> Maybe [Bool]

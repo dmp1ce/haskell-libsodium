@@ -378,3 +378,74 @@ cryptoSecretBoxOpenEasy c (SecretBoxNonce n) (SecretBoxKey k) =
     case retDecrypt of
       0 -> BS.packCStringLen ((castPtr ptrMessage), mlen) >>= return . Right
       i -> return $ Left (fromEnum i)
+
+-- *** Detached mode
+
+newtype SecretBoxMac = SecretBoxMac (GuardedPtr CUChar)
+
+-- | Examines the value in guarded memory space to determine if Mac is equal
+instance Eq SecretBoxMac where
+  (SecretBoxMac (GuardedPtr fPtrX)) == (SecretBoxMac (GuardedPtr fPtrY)) =
+    unsafePerformIO $
+      withForeignPtr fPtrX $ \ptrX -> withForeignPtr fPtrY $ \ptrY -> do
+        x <- peek ptrX
+        y <- peek ptrY
+        return $ x == y
+
+-- | Some applications may need to store the authentication tag and the encrypted message at different locations.
+cryptoSecretBoxDetached :: BS.ByteString -- ^ Message
+                        -> SecretBoxNonce
+                        -> SecretBoxKey
+                        -> Either Int (BS.ByteString, SecretBoxMac)
+                        -- ^ Cyphertext and Mac or error code from
+                        -- 'c'crypto_secretbox_easy'
+cryptoSecretBoxDetached m (SecretBoxNonce n) (SecretBoxKey k) =
+  unsafePerformIO $ do
+  -- Determine length of cypher text
+  let mlen = BS.length m
+  fPtrCypher <- mallocForeignPtrBytes mlen
+  gPtrMac <- sodiumMAlloc c'crypto_secretbox_MACBYTES
+  -- This message should probably be allocated in guarded memory
+  -- with a custom @Guarded@ function
+  BS.useAsCString m $ \ptrM ->
+    withForeignPtr fPtrCypher $ \ptrCypher ->
+      withForeignPtr (unGuardedPtr gPtrMac) $ \ptrMac ->
+        withForeignPtr (unGuardedPtr n) $ \ptrNonce ->
+          withForeignPtr (unGuardedPtr k) $ \ptrKey -> do
+
+    retEncrypt <- c'crypto_secretbox_detached ptrCypher ptrMac (castPtr ptrM) 
+                  (toEnum mlen) (castPtr ptrNonce) (castPtr ptrKey)
+
+    case retEncrypt of
+      0 -> do
+             c' <- BS.packCStringLen ((castPtr ptrCypher),mlen)
+             return $ Right (c',(SecretBoxMac gPtrMac))
+      i -> return $ Left (fromEnum i)
+
+-- The 'cryptoSecretBoxOpenEasy' function verifies and decrypts a ciphertext produced by 'cryptoSecretBoxEasy'.
+cryptoSecretBoxOpenDetached :: BS.ByteString -- ^ Cyphertext
+                            -> SecretBoxMac
+                            -> SecretBoxNonce
+                            -> SecretBoxKey
+                            -> Either Int BS.ByteString
+                            -- ^ Message or error code from
+                            -- 'c'crypto_secretbox_open_easy'
+cryptoSecretBoxOpenDetached c (SecretBoxMac mac) (SecretBoxNonce n)
+                            (SecretBoxKey k) = unsafePerformIO $ do
+  -- Determine length of cyphertext
+  let mlen = BS.length c
+  -- This message should probably be allocated in guarded memory
+  -- with a custom @Guarded@ function
+  fPtrMessage <- mallocForeignPtrBytes mlen
+  withForeignPtr fPtrMessage $ \ptrMessage ->
+    BS.useAsCString c $ \ptrC ->
+      withForeignPtr (unGuardedPtr mac) $ \ptrMac ->
+        withForeignPtr (unGuardedPtr n) $ \ptrNonce ->
+          withForeignPtr (unGuardedPtr k) $ \ptrKey -> do
+
+    retDecrypt <- c'crypto_secretbox_open_detached ptrMessage (castPtr ptrC)
+                  ptrMac (toEnum mlen) (castPtr ptrNonce) (castPtr ptrKey)
+
+    case retDecrypt of
+      0 -> BS.packCStringLen ((castPtr ptrMessage), mlen) >>= return . Right
+      i -> return $ Left (fromEnum i)

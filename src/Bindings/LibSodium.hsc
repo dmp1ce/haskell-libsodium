@@ -170,6 +170,19 @@ The nonce doesn't have to be confidential, but it should never ever be reused wi
   Ptr CUChar -> Ptr CUChar -> IO CInt
 -- |
 
+-- *** Detached mode
+
+-- | Some applications may need to store the authentication tag and the encrypted message at different locations.
+#ccall crypto_secretbox_detached, Ptr CUChar -> Ptr CUChar -> Ptr CUChar -> \
+  CULLong -> Ptr CUChar -> Ptr CUChar -> IO CInt
+-- |
+
+-- | The 'c'crypto_secretbox_open_detached' function verifies and decrypts a ciphertext produced by 'c'crypto_secretbox_detached'.
+#ccall crypto_secretbox_open_detached, Ptr CUChar -> Ptr CUChar -> Ptr CUChar -> \
+  CULLong -> Ptr CUChar -> Ptr CUChar -> IO CInt
+-- |
+
+
 -- *** Constants
 
 #num crypto_secretbox_KEYBYTES
