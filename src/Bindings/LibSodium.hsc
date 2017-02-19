@@ -144,7 +144,9 @@ the descriptor for @\/dev\/urandom@ was closed using 'c'randombytes_close'. -}
 #ccall randombytes_stir, IO ()
 -- |
 
--- ** Secret-key authenticated encryption
+-- ** Secret-key cryptography
+
+-- *** Secret-key authenticated encryption
 
 {- $
 Purpose:
@@ -158,7 +160,7 @@ The nonce doesn't have to be confidential, but it should never ever be reused wi
 -}
 -- '
 
--- *** Combined mode
+-- **** Combined mode
 
 -- | In combined mode, the authentication tag and the encrypted message are stored together. This is usually what you want.
 #ccall crypto_secretbox_easy, Ptr CUChar -> Ptr CUChar -> CULLong -> \
@@ -170,7 +172,7 @@ The nonce doesn't have to be confidential, but it should never ever be reused wi
   Ptr CUChar -> Ptr CUChar -> IO CInt
 -- |
 
--- *** Detached mode
+-- **** Detached mode
 
 -- | Some applications may need to store the authentication tag and the encrypted message at different locations.
 #ccall crypto_secretbox_detached, Ptr CUChar -> Ptr CUChar -> Ptr CUChar -> \
@@ -183,8 +185,34 @@ The nonce doesn't have to be confidential, but it should never ever be reused wi
 -- |
 
 
--- *** Constants
+-- **** Constants
 
 #num crypto_secretbox_KEYBYTES
 #num crypto_secretbox_MACBYTES
 #num crypto_secretbox_NONCEBYTES
+
+-- *** Secret-key authentication
+
+{- $
+TODO
+
+https://download.libsodium.org/doc/secret-key_cryptography/secret-key_authentication.html
+-}
+
+-- *** Authenticated Encryption with Additional Data
+
+{- $
+TODO
+
+https://download.libsodium.org/doc/secret-key_cryptography/aead.html
+-}
+
+-- ** Public-key cryptography
+
+-- *** Public-key authenticated encryption
+
+{- $
+TODO
+
+https://download.libsodium.org/doc/public-key_cryptography/authenticated_encryption.html
+-}

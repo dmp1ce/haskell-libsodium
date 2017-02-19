@@ -291,7 +291,10 @@ randomBytesClose = do
 randomBytesStir :: IO ()
 randomBytesStir = c'randombytes_stir
 
--- ** Secret-key authenticated encryption
+-- ** Secret-key cryptography
+
+-- *** Secret-key authenticated encryption
+
 
 {- $
 Purpose:
@@ -324,7 +327,7 @@ newSecretBoxNonce = do
     c'randombytes_buf (castPtr ptr) (toEnum c'crypto_secretbox_NONCEBYTES)
   return $ SecretBoxNonce gPtrKey
 
--- *** Combined mode
+-- **** Combined mode
 
 -- | In combined mode, the authentication tag and the encrypted message are stored together. This is usually what you want.
 cryptoSecretBoxEasy :: BS.ByteString -- ^ Message
@@ -379,7 +382,7 @@ cryptoSecretBoxOpenEasy c (SecretBoxNonce n) (SecretBoxKey k) =
       0 -> BS.packCStringLen ((castPtr ptrMessage), mlen) >>= return . Right
       i -> return $ Left (fromEnum i)
 
--- *** Detached mode
+-- **** Detached mode
 
 newtype SecretBoxMac = SecretBoxMac (GuardedPtr CUChar)
 
@@ -422,7 +425,7 @@ cryptoSecretBoxDetached m (SecretBoxNonce n) (SecretBoxKey k) =
              return $ Right (c',(SecretBoxMac gPtrMac))
       i -> return $ Left (fromEnum i)
 
--- The 'cryptoSecretBoxOpenEasy' function verifies and decrypts a ciphertext produced by 'cryptoSecretBoxEasy'.
+-- | The 'cryptoSecretBoxOpenEasy' function verifies and decrypts a ciphertext produced by 'cryptoSecretBoxEasy'.
 cryptoSecretBoxOpenDetached :: BS.ByteString -- ^ Cyphertext
                             -> SecretBoxMac
                             -> SecretBoxNonce
