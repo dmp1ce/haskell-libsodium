@@ -180,8 +180,8 @@ The nonce doesn't have to be confidential, but it should never ever be reused wi
 -- |
 
 -- | The 'c'crypto_secretbox_open_detached' function verifies and decrypts a ciphertext produced by 'c'crypto_secretbox_detached'.
-#ccall crypto_secretbox_open_detached, Ptr CUChar -> Ptr CUChar -> Ptr CUChar -> \
-  CULLong -> Ptr CUChar -> Ptr CUChar -> IO CInt
+#ccall crypto_secretbox_open_detached, Ptr CUChar -> Ptr CUChar -> \
+  Ptr CUChar -> CULLong -> Ptr CUChar -> Ptr CUChar -> IO CInt
 -- |
 
 
@@ -212,7 +212,39 @@ https://download.libsodium.org/doc/secret-key_cryptography/aead.html
 -- *** Public-key authenticated encryption
 
 {- $
-TODO
+Using public-key authenticated encryption, Bob can encrypt a confidential message specifically for Alice, using Alice's public key.
 
-https://download.libsodium.org/doc/public-key_cryptography/authenticated_encryption.html
+Using Bob's public key, Alice can verify that the encrypted message was actually created by Bob and was not tampered with, before eventually decrypting it.
+
+Alice only needs Bob's public key, the nonce and the ciphertext. Bob should never ever share his secret key, even with Alice.
+
+And in order to send messages to Alice, Bob only needs Alice's public key. Alice should never ever share her secret key either, even with Bob.
+
+Alice can reply to Bob using the same system, without having to generate a distinct key pair.
+
+The nonce doesn't have to be confidential, but it should be used with just one invocation of c'crypto_box_open_easy for a particular pair of public and secret keys.
 -}
+
+-- **** Key pair generation
+
+-- | Randomly generates a secret key and a corresponding public key.
+#ccall crypto_box_keypair, Ptr CUChar -> Ptr CUChar -> IO CInt
+-- |
+
+-- | Deterministically derive keypair from a single key seed ('c'crypto_box_SEEDBYTES' bytes).
+#ccall crypto_box_seed_keypair, Ptr CUChar -> Ptr CUChar -> Ptr CUChar -> \
+  IO CInt
+-- |
+
+-- | Compute the public key given a secret key previously generated with 'c'crypto_box_keypair'
+#ccall crypto_scalarmult_base, Ptr CUChar -> Ptr CUChar -> IO CInt
+-- |
+
+-- **** Constants
+
+#num crypto_box_PUBLICKEYBYTES
+#num crypto_box_SECRETKEYBYTES
+#num crypto_box_MACBYTES
+#num crypto_box_NONCEBYTES
+#num crypto_box_SEEDBYTES
+#num crypto_box_BEFORENMBYTES
