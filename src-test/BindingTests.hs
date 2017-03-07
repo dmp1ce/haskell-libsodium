@@ -49,6 +49,8 @@ bindingTests =
   , QC.testProperty "c'crypto_secretbox_easy" prop_c'crypto_secretbox_easy
   , QC.testProperty "c'crypto_secretbox_detached"
                     prop_c'crypto_secretbox_detached
+  , QC.testProperty "c'crypto_scalarmult_base"
+                    prop_c'crypto_scalarmult_base
   ]
 
 test_c'sodium_init :: Assertion
@@ -412,6 +414,36 @@ prop_c'crypto_secretbox_detached message = QC.monadicIO $ do
 
       peekCStringLen (ptrMessage, mlen)
   QC.assert (m == message)
+
+-- Verify public key can be regenerated
+prop_c'crypto_scalarmult_base :: QC.Property
+prop_c'crypto_scalarmult_base = QC.monadicIO $ do
+  (p1, p2) <- QC.run $ do
+    fPtrPrivateKey <- mallocForeignPtrBytes (c'crypto_box_SECRETKEYBYTES)
+    fPtrPublicKey <- mallocForeignPtrBytes (c'crypto_box_PUBLICKEYBYTES)
+    fPtrPublicKey2 <- mallocForeignPtrBytes (c'crypto_box_PUBLICKEYBYTES)
+    withForeignPtr fPtrPrivateKey $ \ptrPrivateKey ->
+      withForeignPtr fPtrPublicKey2 $ \ptrPublicKey2 ->
+        withForeignPtr fPtrPublicKey $ \ptrPublicKey -> do
+
+      retKeyGen <- c'crypto_box_keypair ptrPublicKey ptrPrivateKey
+
+      case retKeyGen of
+        0 -> return ()
+        i -> assertFailure $ "Key generation returned: " ++ show i
+
+      -- Generate public key from private key
+      retKeyGen2 <- c'crypto_scalarmult_base ptrPublicKey2 ptrPrivateKey
+
+      case retKeyGen2 of
+        0 -> return ()
+        i -> assertFailure $ "Key generation returned: " ++ show i
+
+      p1 <- peekCStringLen ((castPtr ptrPublicKey), c'crypto_box_PUBLICKEYBYTES)
+      p2 <- peekCStringLen ((castPtr ptrPublicKey2), c'crypto_box_PUBLICKEYBYTES)
+      return (p1, p2)
+
+  QC.assert (p1 == p2)
 
 -- Can be used to look at raw bit list for debugging
 --bitList :: (Bits b) => b -> Maybe [Bool]
