@@ -46,8 +46,8 @@ bindingTests =
   , testCase "c'randombytes_uniform" test_c'randombytes_uniform
   , testCase "c'randombytes_buf" test_c'randombytes_buf
   , testCase "c'randombytes_stir" test_c'randombytes_buf
-  , QC.testProperty "c'cypto_secretbox_easy" prop_c'crypto_secretbox_easy
-  , QC.testProperty "c'cypto_secretbox_detached"
+  , QC.testProperty "c'crypto_secretbox_easy" prop_c'crypto_secretbox_easy
+  , QC.testProperty "c'crypto_secretbox_detached"
                     prop_c'crypto_secretbox_detached
   ]
 
