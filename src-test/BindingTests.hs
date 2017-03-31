@@ -418,32 +418,19 @@ prop_c'crypto_secretbox_detached message = QC.monadicIO $ do
 -- Verify public key can be regenerated
 prop_c'crypto_scalarmult_base :: QC.Property
 prop_c'crypto_scalarmult_base = QC.monadicIO $ do
-  (p1, p2) <- QC.run $ do
-    fPtrPrivateKey <- mallocForeignPtrBytes (c'crypto_box_SECRETKEYBYTES)
-    fPtrPublicKey <- mallocForeignPtrBytes (c'crypto_box_PUBLICKEYBYTES)
-    fPtrPublicKey2 <- mallocForeignPtrBytes (c'crypto_box_PUBLICKEYBYTES)
-    withForeignPtr fPtrPrivateKey $ \ptrPrivateKey ->
-      withForeignPtr fPtrPublicKey2 $ \ptrPublicKey2 ->
-        withForeignPtr fPtrPublicKey $ \ptrPublicKey -> do
+  (pub1, pub2) <- QC.run $ do
+    fPtrPrivateKey <- mallocForeignPtrBytes c'crypto_box_SECRETKEYBYTES
+    (,) <$> genKey c'crypto_box_keypair     fPtrPrivateKey
+        <*> genKey c'crypto_scalarmult_base fPtrPrivateKey
+  QC.assert $ pub1 == pub2
 
-      retKeyGen <- c'crypto_box_keypair ptrPublicKey ptrPrivateKey
-
-      case retKeyGen of
-        0 -> return ()
-        i -> assertFailure $ "Key generation returned: " ++ show i
-
-      -- Generate public key from private key
-      retKeyGen2 <- c'crypto_scalarmult_base ptrPublicKey2 ptrPrivateKey
-
-      case retKeyGen2 of
-        0 -> return ()
-        i -> assertFailure $ "Key generation returned: " ++ show i
-
-      p1 <- peekCStringLen ((castPtr ptrPublicKey), c'crypto_box_PUBLICKEYBYTES)
-      p2 <- peekCStringLen ((castPtr ptrPublicKey2), c'crypto_box_PUBLICKEYBYTES)
-      return (p1, p2)
-
-  QC.assert (p1 == p2)
+  where
+    genKey generator fPtrPri = do
+      fPtrPub <- mallocForeignPtrBytes c'crypto_box_PUBLICKEYBYTES
+      withForeignPtr fPtrPri $ \ptrPri -> withForeignPtr fPtrPub $ \ptrPub -> do
+        r <- generator ptrPub ptrPri
+        unless (r == 0) $ assertFailure $ "Key generation returned: " ++ show r
+        peekCStringLen (castPtr ptrPub, c'crypto_box_PUBLICKEYBYTES)
 
 -- Can be used to look at raw bit list for debugging
 --bitList :: (Bits b) => b -> Maybe [Bool]
