@@ -38,6 +38,7 @@ hlTests =
   , testCase "randomBytesStir" test_randomBytesStir
   , QC.testProperty "cryptoSecretBoxEasy" prop_cryptoSecretBoxEasy
   , QC.testProperty "cryptoSecretBoxDetached" prop_cryptoSecretBoxDetached
+  , QC.testProperty "cryptoScalarmultBase" prop_cryptoScalarmultBase
   ]
 
 test_sodium_init :: Assertion
@@ -240,3 +241,20 @@ prop_cryptoSecretBoxDetached message = QC.monadicIO $ do
     (Left i)   -> QC.run $ assertFailure $
                   show i ++ " returned for message '" ++ message ++ "'"
     (Right m') -> QC.assert $ m' == m
+
+-- Verify public key can be regenerated
+prop_cryptoScalarmultBase :: QC.Property
+prop_cryptoScalarmultBase = QC.monadicIO $ do
+  (pub1, pub2) <- QC.run $ do
+    e1 <- cryptoBoxKeypair
+    (s1,p1) <- case e1 of
+                 (Right (BoxKeypair s p)) -> return (s,p)
+                 (Left i) -> do assertFailure $ "cryptoBoxKeypair returned " ++ (show i)
+                                error "error"
+    let e2 = cryptoScalarmultBase s1
+    p2 <- case e2 of
+      (Right (BoxKeypair _ p)) -> return p
+      (Left i) -> do assertFailure $ "cryptoScalarmultBase returned " ++ (show i)
+                     error "Error instead of returning an invalid 'BoxPublicKey'"
+    return (p1, p2)
+  QC.assert $ pub1 == pub2

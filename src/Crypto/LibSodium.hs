@@ -12,7 +12,112 @@ Portability : POSIX
 -}
 
 {-# OPTIONS_GHC -Wall #-}
-module Crypto.LibSodium where
+module Crypto.LibSodium ( InitResult (..)
+                        , NumCompareResult (..)
+                        , unGuardedPtr
+                        , sodiumInit
+-- ** Helpers
+-- *** Constant-time test for equality
+                        , sodiumMemcmp
+-- *** Hexadecimal encoding/decoding
+                        , sodiumBin2Hex
+                        , sodiumHex2Bin
+-- *** Incrementing large numbers
+                        , sodiumIncrement
+--- *** Comparing large numbers
+                        , sodiumCompare
+-- *** Adding large numbers
+                        , sodiumAdd
+-- *** Testing for all zeros
+                        , sodiumIsZero
+-- ** Securing memory allocations
+-- *** Zeroing memory
+                        , sodiumMemZero
+-- *** Locking memory
+                        , sodiumMLock
+                        , sodiumMUnlock
+-- *** Guarded heap allocations
+                        , sodiumMAlloc
+                        , sodiumAllocArray
+                        , sodiumFree
+                        , sodiumMProtectNoAccess
+                        , sodiumMProtectReadonly
+                        , sodiumMProtectReadWrite
+-- ** Random data
+                        , randomBytesRandom
+                        , randomBytesUniform
+                        , randomBytesBuf
+                        , randomBytesClose
+                        , randomBytesStir
+-- ** Secret-key cryptography
+
+-- *** Secret-key authenticated encryption
+
+{- |
+Purpose:
+
+1. Encrypt a message with a key and a nonce to keep it confidential
+2. Compute an authentication tag. This tag is used to make sure that the message
+hasn't been tampered with before decrypting it.
+
+A single key is used both to encrypt\/sign and verify\/decrypt messages. For this
+reason, it is critical to keep the key confidential. Use 'newSecretBoxKey' to
+generate a new key.
+
+The nonce doesn't have to be confidential, but it should never ever be reused with
+the same key. Use 'newNonce' to generate a new Nonce.
+-}
+                        , newSecretBoxKey
+                        , newSecretBoxNonce
+-- **** Combined mode
+                        , cryptoSecretBoxEasy
+                        , cryptoSecretBoxOpenEasy
+-- **** Detached mode
+                        , cryptoSecretBoxDetached
+                        , cryptoSecretBoxOpenDetached
+-- *** Secret-key authentication
+
+{- |
+TODO
+
+https://download.libsodium.org/doc/secret-key_cryptography/secret-key_authentication.html
+-}
+
+{- |
+TODO
+
+https://download.libsodium.org/doc/secret-key_cryptography/aead.html
+-}
+
+-- ** Public-key cryptography
+
+-- *** Public-key authenticated encryption
+
+{- |
+Using public-key authenticated encryption, Bob can encrypt a confidential message
+specifically for Alice, using Alice's public key.
+
+Using Bob's public key, Alice can verify that the encrypted message was actually
+created by Bob and was not tampered with, before eventually decrypting it.
+
+Alice only needs Bob's public key, the nonce and the ciphertext. Bob should never
+ever share his secret key, even with Alice.
+
+And in order to send messages to Alice, Bob only needs Alice's public key. Alice
+should never ever share her secret key either, even with Bob.
+
+Alice can reply to Bob using the same system, without having to generate a distinct
+key pair.
+
+The nonce doesn't have to be confidential, but it should be used with just one
+invocation of 'cryptoBoxOpenEasy' for a particular pair of public and secret keys.
+-}
+
+-- **** Key pair generation
+                        , BoxKeypair (BoxKeypair)
+                        , cryptoBoxKeypair
+                        , cryptoScalarmultBase
+                        ) where
 
 import Bindings.LibSodium
 import Foreign.Storable
@@ -20,7 +125,6 @@ import Foreign.Ptr
 import Foreign.ForeignPtr
 import Foreign.C.Types
 import Foreign.C.String
-import Data.Word
 import qualified Data.ByteString.Char8 as BS
 import System.IO.Unsafe ( unsafePerformIO )
 import Foreign.Marshal.Array
@@ -37,6 +141,17 @@ data NumCompareResult = NumCompareGreaterThan | NumCompareLessThan
 -- or 'sodiumAllocArray'
 newtype GuardedPtr a = GuardedPtr { unGuardedPtr :: ForeignPtr a }
 
+-- | Examines the value in guarded memory space to determine if
+-- 'Storable' is 'Eq'
+guardedPtrContentsEq :: (Eq a, Storable a)
+                     => GuardedPtr a -> GuardedPtr a -> Bool
+guardedPtrContentsEq (GuardedPtr fPtrX) (GuardedPtr fPtrY) =
+  unsafePerformIO $
+    withForeignPtr fPtrX $ \ptrX -> withForeignPtr fPtrY $ \ptrY -> do
+      x <- peek ptrX
+      y <- peek ptrY
+      return $ x == y
+
 -- | <https://download.libsodium.org/doc/usage/ Documentation on when to use sodium_init>
 sodiumInit :: IO InitResult
 sodiumInit =
@@ -46,8 +161,6 @@ sodiumInit =
       mapInit i    = InitUnknown i
   in c'sodium_init >>= return . mapInit . fromEnum
 
--- ** Helpers
--- *** Constant-time test for equality
 
 -- | Uses 'c'sodium_memcmp' for constant-time test for equality
 sodiumMemcmp :: (Storable s) =>  Ptr s -> Ptr s
@@ -65,7 +178,6 @@ sodiumMemcmp p1 p2 =
                                      (toEnum size1)
                 (return . mapRes . fromEnum) r
 
--- *** Hexadecimal encoding/decoding
 
 -- | Uses 'c'sodium_bin2hex' to convert a 'Storable' into a hexadecimal 'String'
 sodiumBin2Hex :: (Storable s) => s -> String
@@ -109,7 +221,6 @@ sodiumHex2Bin hex = unsafePerformIO $ do
     hexEndValue <- peek ptrHexEnd >>= peekCAString
     return (binValue, hexEndValue)
 
--- *** Incrementing large numbers
 
 -- | Uses 'c'sodium_increment' to increment a 'Int' by one
 sodiumIncrement :: Int -> IO Int
@@ -120,7 +231,6 @@ sodiumIncrement i = do
     c'sodium_increment (castPtr ptrNum) ((toEnum . sizeOf) i)
     peek ptrNum
 
---- *** Comparing large numbers
 
 -- | Uses 'c'sodium_compare' to compare two 'Int'
 sodiumCompare :: Int -> Int -> IO NumCompareResult
@@ -139,7 +249,6 @@ sodiumCompare x y =
                            ((toEnum . sizeOf) x)
           (return . mapRes . fromEnum) r
 
--- *** Adding large numbers
 
 -- | Uses 'c'sodium_add' to add 'Int' to an 'Int'
 -- Be careful using this function. Overflow from addition is not checked.
@@ -154,7 +263,6 @@ sodiumAdd x y = do
     c'sodium_add (castPtr ptrNum1) (castPtr ptrNum2) ((toEnum . sizeOf) x)
     peek ptrNum1
 
--- *** Testing for all zeros
 
 -- | Uses 'c'sodium_is_zero' to check for all zeros
 sodiumIsZero :: (Storable s) => s
@@ -171,9 +279,6 @@ sodiumIsZero x = do
       1 -> Right True
       i -> Left $ fromEnum i
 
--- ** Securing memory allocations
-
--- *** Zeroing memory
 
 -- | Uses 'c'sodium_memzero' to zero memory location
 sodiumMemZero :: (Storable s) => Ptr s -> IO ()
@@ -181,7 +286,6 @@ sodiumMemZero x = do
   sizeOfx <- peek x >>= return . sizeOf
   c'sodium_memzero (castPtr x) (toEnum sizeOfx)
 
--- *** Locking memory
 
 -- | Uses 'c'sodium_mlock' to prevent memory from being swapped
 sodiumMLock :: (Storable s) => Ptr s
@@ -208,7 +312,6 @@ sodiumMUnlock x = do
     (-1) -> Right False
     i    -> Left $ fromEnum i
 
--- *** Guarded heap allocations
 
 -- | Uses 'c'sodium_malloc' to allocate memory which is protected from
 -- overflows
@@ -259,7 +362,6 @@ sodiumMProtectReadWrite gPtr = withForeignPtr (unGuardedPtr gPtr) $ \ptr -> do
     0 -> Right True
     i -> Left $ fromEnum i
 
--- ** Random data
 
 -- | Uses 'c'randombytes_random' to produce a random 'Word'
 randomBytesRandom :: IO Int
@@ -291,23 +393,7 @@ randomBytesClose = do
 randomBytesStir :: IO ()
 randomBytesStir = c'randombytes_stir
 
--- ** Secret-key cryptography
-
--- *** Secret-key authenticated encryption
-
-
-{- $
-Purpose:
-
-1. Encrypt a message with a key and a nonce to keep it confidential
-2. Compute an authentication tag. This tag is used to make sure that the message hasn't been tampered with before decrypting it.
-
-A single key is used both to encrypt\/sign and verify\/decrypt messages. For this reason, it is critical to keep the key confidential. Use 'newKey' to generate a new key.
-
-The nonce doesn't have to be confidential, but it should never ever be reused with the same key. Use 'newNonce' to generate a new Nonce.
--}
-
-newtype SecretBoxKey = SecretBoxKey (GuardedPtr [Word8])
+newtype SecretBoxKey = SecretBoxKey (GuardedPtr CUChar)
 
 newSecretBoxKey :: IO SecretBoxKey
 newSecretBoxKey = do
@@ -317,7 +403,7 @@ newSecretBoxKey = do
     c'randombytes_buf (castPtr ptr) (toEnum c'crypto_secretbox_KEYBYTES)
   return $ SecretBoxKey gPtrKey
 
-newtype SecretBoxNonce = SecretBoxNonce (GuardedPtr [Word8])
+newtype SecretBoxNonce = SecretBoxNonce (GuardedPtr CUChar)
 
 newSecretBoxNonce :: IO SecretBoxNonce
 newSecretBoxNonce = do
@@ -327,9 +413,9 @@ newSecretBoxNonce = do
     c'randombytes_buf (castPtr ptr) (toEnum c'crypto_secretbox_NONCEBYTES)
   return $ SecretBoxNonce gPtrKey
 
--- **** Combined mode
 
--- | In combined mode, the authentication tag and the encrypted message are stored together. This is usually what you want.
+-- | In combined mode, the authentication tag and the encrypted message are stored
+-- together. This is usually what you want.
 cryptoSecretBoxEasy :: BS.ByteString -- ^ Message
                     -> SecretBoxNonce
                     -> SecretBoxKey
@@ -355,7 +441,8 @@ cryptoSecretBoxEasy m (SecretBoxNonce n) (SecretBoxKey k) =
       0 -> BS.packCStringLen ((castPtr ptrCypher),clen) >>= return . Right
       i -> return $ Left (fromEnum i)
 
--- The 'cryptoSecretBoxOpenEasy' function verifies and decrypts a ciphertext produced by 'cryptoSecretBoxEasy'.
+-- | The 'cryptoSecretBoxOpenEasy' function verifies and decrypts a ciphertext
+-- produced by 'cryptoSecretBoxEasy'.
 cryptoSecretBoxOpenEasy :: BS.ByteString -- ^ Cyphertext
                         -> SecretBoxNonce
                         -> SecretBoxKey
@@ -382,20 +469,15 @@ cryptoSecretBoxOpenEasy c (SecretBoxNonce n) (SecretBoxKey k) =
       0 -> BS.packCStringLen ((castPtr ptrMessage), mlen) >>= return . Right
       i -> return $ Left (fromEnum i)
 
--- **** Detached mode
 
 newtype SecretBoxMac = SecretBoxMac (GuardedPtr CUChar)
 
 -- | Examines the value in guarded memory space to determine if Mac is equal
 instance Eq SecretBoxMac where
-  (SecretBoxMac (GuardedPtr fPtrX)) == (SecretBoxMac (GuardedPtr fPtrY)) =
-    unsafePerformIO $
-      withForeignPtr fPtrX $ \ptrX -> withForeignPtr fPtrY $ \ptrY -> do
-        x <- peek ptrX
-        y <- peek ptrY
-        return $ x == y
+  (SecretBoxMac x) == (SecretBoxMac y) = guardedPtrContentsEq x y
 
--- | Some applications may need to store the authentication tag and the encrypted message at different locations.
+-- | Some applications may need to store the authentication tag and the encrypted
+-- message at different locations.
 cryptoSecretBoxDetached :: BS.ByteString -- ^ Message
                         -> SecretBoxNonce
                         -> SecretBoxKey
@@ -425,7 +507,8 @@ cryptoSecretBoxDetached m (SecretBoxNonce n) (SecretBoxKey k) =
              return $ Right (c',(SecretBoxMac gPtrMac))
       i -> return $ Left (fromEnum i)
 
--- | The 'cryptoSecretBoxOpenEasy' function verifies and decrypts a ciphertext produced by 'cryptoSecretBoxEasy'.
+-- | The 'cryptoSecretBoxOpenEasy' function verifies and decrypts a ciphertext
+-- produced by 'cryptoSecretBoxEasy'.
 cryptoSecretBoxOpenDetached :: BS.ByteString -- ^ Cyphertext
                             -> SecretBoxMac
                             -> SecretBoxNonce
@@ -451,4 +534,39 @@ cryptoSecretBoxOpenDetached c (SecretBoxMac mac) (SecretBoxNonce n)
 
     case retDecrypt of
       0 -> BS.packCStringLen ((castPtr ptrMessage), mlen) >>= return . Right
+      i -> return $ Left (fromEnum i)
+
+
+newtype BoxSecretKey = BoxSecretKey (GuardedPtr CUChar)
+instance Eq BoxSecretKey where
+  (BoxSecretKey x) == (BoxSecretKey y) = guardedPtrContentsEq x y
+newtype BoxPublicKey = BoxPublicKey (GuardedPtr CUChar)
+instance Eq BoxPublicKey where
+  (BoxPublicKey x) == (BoxPublicKey y) = guardedPtrContentsEq x y
+data BoxKeypair = BoxKeypair BoxSecretKey BoxPublicKey deriving Eq
+
+-- | Uses pseudo randomness to generate 'BoxKeypair'.
+cryptoBoxKeypair :: IO (Either Int BoxKeypair)
+cryptoBoxKeypair = do
+  gPtrSec <- sodiumMAlloc c'crypto_box_SECRETKEYBYTES
+  gPtrPub <- sodiumMAlloc c'crypto_box_PUBLICKEYBYTES
+  generateKeypair c'crypto_box_keypair gPtrSec gPtrPub
+
+-- | Deterministic function for recreating 'BoxKeypair' from a secret key.
+cryptoScalarmultBase :: BoxSecretKey -> Either Int BoxKeypair
+cryptoScalarmultBase (BoxSecretKey gPtrSec) = unsafePerformIO $ do
+  gPtrPub <- sodiumMAlloc c'crypto_box_PUBLICKEYBYTES
+  generateKeypair c'crypto_scalarmult_base gPtrSec gPtrPub
+
+-- | Helper function for creating a 'BoxKeypair'
+generateKeypair :: (Ptr CUChar -> Ptr CUChar -> IO CInt)
+                -> GuardedPtr CUChar -> GuardedPtr CUChar
+                -> IO (Either Int BoxKeypair)
+generateKeypair generator gPtrSec gPtrPub =
+  withForeignPtr (unGuardedPtr gPtrSec) $ \ptrSec ->
+    withForeignPtr (unGuardedPtr gPtrPub) $ \ptrPub -> do
+    r <- generator (castPtr ptrPub) (castPtr ptrSec)
+    case r of
+      0 ->return $ Right $
+             BoxKeypair (BoxSecretKey gPtrSec) (BoxPublicKey gPtrPub)
       i -> return $ Left (fromEnum i)
