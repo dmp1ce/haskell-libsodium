@@ -6,10 +6,14 @@ import qualified Test.Tasty.QuickCheck as QC
 import qualified Test.QuickCheck.Monadic as QC
 
 import Crypto.LibSodium
+import Bindings.LibSodium
 
 import Foreign.C.Types
 import Foreign.ForeignPtr
 import Foreign.Storable
+import Foreign.Ptr
+import Foreign.Marshal.Array
+import Data.Bits
 import Control.Monad
 import Numeric
 import qualified Data.ByteString.Char8 as BS
@@ -39,6 +43,7 @@ hlTests =
   , QC.testProperty "cryptoSecretBoxEasy" prop_cryptoSecretBoxEasy
   , QC.testProperty "cryptoSecretBoxDetached" prop_cryptoSecretBoxDetached
   , QC.testProperty "cryptoScalarmultBase" prop_cryptoScalarmultBase
+  , QC.testProperty "guardedCompareCanFail" prop_guardedCompareCanFail
   ]
 
 test_sodium_init :: Assertion
@@ -258,3 +263,28 @@ prop_cryptoScalarmultBase = QC.monadicIO $ do
                      error "Error instead of returning an invalid 'BoxPublicKey'"
     return (p1, p2)
   QC.assert $ pub1 == pub2
+
+-- Verify that compairing SecretBoxMac can results False as expected
+prop_guardedCompareCanFail :: QC.Property
+prop_guardedCompareCanFail = QC.monadicIO $ do
+  (gp1, gp2) <- QC.run $ do
+    keyPair <- cryptoBoxKeypair
+    (BoxPublicKey gp1) <- case keyPair of
+            (Right (BoxKeypair _ p)) -> return p
+            (Left i) -> do assertFailure $ "cryptoBoxKeypair returned " ++ (show i)
+                           error "error"
+
+    -- Create a GuardedPtr which is slightly different than generated BoxPublicKey
+    gp2 <- sodiumMAlloc c'crypto_box_PUBLICKEYBYTES
+    withForeignPtr (unGuardedPtr gp2) $ \ptr2 ->
+      withForeignPtr (unGuardedPtr gp1) $ \ptr1 -> do
+        copyArray ptr1 ptr2 c'crypto_box_PUBLICKEYBYTES
+        let lastCuPtr = plusPtr ptr2 (c'crypto_box_PUBLICKEYBYTES - 1)
+        cuStorable <- peek lastCuPtr :: IO CUChar
+        poke lastCuPtr (xor cuStorable 1)
+        return ()
+
+    -- Make the tenth element of x different than the tenth element of y
+    return (gp1,gp2)
+
+  QC.assert $ (BoxPublicKey gp1) /= (BoxPublicKey gp2)

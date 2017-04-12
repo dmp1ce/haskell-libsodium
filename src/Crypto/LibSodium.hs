@@ -115,6 +115,7 @@ invocation of 'cryptoBoxOpenEasy' for a particular pair of public and secret key
 
 -- **** Key pair generation
                         , BoxKeypair (BoxKeypair)
+                        , BoxPublicKey (BoxPublicKey)
                         , cryptoBoxKeypair
                         , cryptoScalarmultBase
                         ) where
@@ -141,15 +142,16 @@ data NumCompareResult = NumCompareGreaterThan | NumCompareLessThan
 -- or 'sodiumAllocArray'
 newtype GuardedPtr a = GuardedPtr { unGuardedPtr :: ForeignPtr a }
 
--- | Examines the value in guarded memory space to determine if
--- 'Storable' is 'Eq'
+-- | Compare array of 'Storable' values in guarded memory space
 guardedPtrContentsEq :: (Eq a, Storable a)
-                     => GuardedPtr a -> GuardedPtr a -> Bool
-guardedPtrContentsEq (GuardedPtr fPtrX) (GuardedPtr fPtrY) =
+                      => GuardedPtr a -> GuardedPtr a
+                      -> Int  -- ^ Number of array elements to compare
+                      -> Bool
+guardedPtrContentsEq (GuardedPtr fPtrX) (GuardedPtr fPtrY) l =
   unsafePerformIO $
     withForeignPtr fPtrX $ \ptrX -> withForeignPtr fPtrY $ \ptrY -> do
-      x <- peek ptrX
-      y <- peek ptrY
+      x <- peekArray l ptrX
+      y <- peekArray l ptrY
       return $ x == y
 
 -- | <https://download.libsodium.org/doc/usage/ Documentation on when to use sodium_init>
@@ -160,7 +162,6 @@ sodiumInit =
       mapInit 1    = AlreadyInitialized
       mapInit i    = InitUnknown i
   in c'sodium_init >>= return . mapInit . fromEnum
-
 
 -- | Uses 'c'sodium_memcmp' for constant-time test for equality
 sodiumMemcmp :: (Storable s) =>  Ptr s -> Ptr s
@@ -177,7 +178,6 @@ sodiumMemcmp p1 p2 =
                                      (castPtr p2)
                                      (toEnum size1)
                 (return . mapRes . fromEnum) r
-
 
 -- | Uses 'c'sodium_bin2hex' to convert a 'Storable' into a hexadecimal 'String'
 sodiumBin2Hex :: (Storable s) => s -> String
@@ -221,7 +221,6 @@ sodiumHex2Bin hex = unsafePerformIO $ do
     hexEndValue <- peek ptrHexEnd >>= peekCAString
     return (binValue, hexEndValue)
 
-
 -- | Uses 'c'sodium_increment' to increment a 'Int' by one
 sodiumIncrement :: Int -> IO Int
 sodiumIncrement i = do
@@ -230,7 +229,6 @@ sodiumIncrement i = do
     poke ptrNum i
     c'sodium_increment (castPtr ptrNum) ((toEnum . sizeOf) i)
     peek ptrNum
-
 
 -- | Uses 'c'sodium_compare' to compare two 'Int'
 sodiumCompare :: Int -> Int -> IO NumCompareResult
@@ -249,7 +247,6 @@ sodiumCompare x y =
                            ((toEnum . sizeOf) x)
           (return . mapRes . fromEnum) r
 
-
 -- | Uses 'c'sodium_add' to add 'Int' to an 'Int'
 -- Be careful using this function. Overflow from addition is not checked.
 sodiumAdd :: Int -> Int -> IO Int
@@ -262,7 +259,6 @@ sodiumAdd x y = do
     poke ptrNum2 y
     c'sodium_add (castPtr ptrNum1) (castPtr ptrNum2) ((toEnum . sizeOf) x)
     peek ptrNum1
-
 
 -- | Uses 'c'sodium_is_zero' to check for all zeros
 sodiumIsZero :: (Storable s) => s
@@ -279,13 +275,11 @@ sodiumIsZero x = do
       1 -> Right True
       i -> Left $ fromEnum i
 
-
 -- | Uses 'c'sodium_memzero' to zero memory location
 sodiumMemZero :: (Storable s) => Ptr s -> IO ()
 sodiumMemZero x = do
   sizeOfx <- peek x >>= return . sizeOf
   c'sodium_memzero (castPtr x) (toEnum sizeOfx)
-
 
 -- | Uses 'c'sodium_mlock' to prevent memory from being swapped
 sodiumMLock :: (Storable s) => Ptr s
@@ -311,7 +305,6 @@ sodiumMUnlock x = do
     0    -> Right True
     (-1) -> Right False
     i    -> Left $ fromEnum i
-
 
 -- | Uses 'c'sodium_malloc' to allocate memory which is protected from
 -- overflows
@@ -362,7 +355,6 @@ sodiumMProtectReadWrite gPtr = withForeignPtr (unGuardedPtr gPtr) $ \ptr -> do
     0 -> Right True
     i -> Left $ fromEnum i
 
-
 -- | Uses 'c'randombytes_random' to produce a random 'Word'
 randomBytesRandom :: IO Int
 randomBytesRandom = (return . fromEnum) =<< c'randombytes_random
@@ -412,7 +404,6 @@ newSecretBoxNonce = do
   withForeignPtr (unGuardedPtr gPtrKey) $ \ptr ->
     c'randombytes_buf (castPtr ptr) (toEnum c'crypto_secretbox_NONCEBYTES)
   return $ SecretBoxNonce gPtrKey
-
 
 -- | In combined mode, the authentication tag and the encrypted message are stored
 -- together. This is usually what you want.
@@ -474,7 +465,8 @@ newtype SecretBoxMac = SecretBoxMac (GuardedPtr CUChar)
 
 -- | Examines the value in guarded memory space to determine if Mac is equal
 instance Eq SecretBoxMac where
-  (SecretBoxMac x) == (SecretBoxMac y) = guardedPtrContentsEq x y
+  (SecretBoxMac x) == (SecretBoxMac y) =
+    guardedPtrContentsEq x y c'crypto_secretbox_MACBYTES
 
 -- | Some applications may need to store the authentication tag and the encrypted
 -- message at different locations.
@@ -539,10 +531,13 @@ cryptoSecretBoxOpenDetached c (SecretBoxMac mac) (SecretBoxNonce n)
 
 newtype BoxSecretKey = BoxSecretKey (GuardedPtr CUChar)
 instance Eq BoxSecretKey where
-  (BoxSecretKey x) == (BoxSecretKey y) = guardedPtrContentsEq x y
+  (BoxSecretKey x) == (BoxSecretKey y) =
+    guardedPtrContentsEq x y c'crypto_box_SECRETKEYBYTES
 newtype BoxPublicKey = BoxPublicKey (GuardedPtr CUChar)
 instance Eq BoxPublicKey where
-  (BoxPublicKey x) == (BoxPublicKey y) = guardedPtrContentsEq x y
+  (BoxPublicKey x) == (BoxPublicKey y) =
+    guardedPtrContentsEq x y c'crypto_box_PUBLICKEYBYTES
+
 data BoxKeypair = BoxKeypair BoxSecretKey BoxPublicKey deriving Eq
 
 -- | Uses pseudo randomness to generate 'BoxKeypair'.
@@ -565,7 +560,7 @@ generateKeypair :: (Ptr CUChar -> Ptr CUChar -> IO CInt)
 generateKeypair generator gPtrSec gPtrPub =
   withForeignPtr (unGuardedPtr gPtrSec) $ \ptrSec ->
     withForeignPtr (unGuardedPtr gPtrPub) $ \ptrPub -> do
-    r <- generator (castPtr ptrPub) (castPtr ptrSec)
+    r <- generator ptrPub ptrSec
     case r of
       0 ->return $ Right $
              BoxKeypair (BoxSecretKey gPtrSec) (BoxPublicKey gPtrPub)
